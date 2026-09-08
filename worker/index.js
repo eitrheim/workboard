@@ -135,7 +135,10 @@ async function api(request, env) {
       const rows = Array.isArray(data[table]) ? data[table] : [];
       counts[table] = rows.length;
       for (const row of rows) {
-        const values = columns.map((key) => row[key] ?? null);
+        const values = columns.map((key) => {
+          const value = row[key] ?? null;
+          return key === "payload" && value && typeof value === "object" ? JSON.stringify(value) : value;
+        });
         statements.push(env.DB.prepare(`INSERT OR REPLACE INTO ${table} (${columns.join(",")}) VALUES (${columns.map(() => "?").join(",")})`).bind(...values));
       }
     }
