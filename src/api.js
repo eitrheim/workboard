@@ -1,4 +1,7 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.PROD ? "" : "http://localhost:8787");
+// Hosted builds always call their same-origin Worker. The local backend is used
+// only when the page itself is running on this computer.
+const runningLocally = typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname);
+const API_BASE = runningLocally ? (import.meta.env.VITE_API_BASE_URL || "http://localhost:8787") : "";
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, { credentials: "include", ...options, headers: { "Content-Type": "application/json", ...(options.headers || {}) } });

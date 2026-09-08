@@ -7,7 +7,7 @@
     "dev": "vite",
     "server": "node server/index.mjs",
     "dev:server": "node --watch server/index.mjs",
-    "build": "vite build && node scripts/prepare-sites-build.mjs",
+    "build": "NODE_ENV=production vite build && node scripts/prepare-sites-build.mjs",
     "preview": "vite preview",
     "test:sites": "node --test tests/sites-worker.test.mjs"
   },
