@@ -86,7 +86,8 @@ function App() {
     setRefreshing(true);
     try {
       const existingTaskIds = new Set(tasks.map((task) => task.id));
-      const state = await refreshLiveState();
+      const state = await backendApi.sync();
+      applyLiveState(state);
       const importedTasks = (state?.tasks || []).filter((task) => !existingTaskIds.has(task.id));
       if (importedTasks.length) {
         setCelebration({ id: Date.now(), points: importedTasks.length });
@@ -104,7 +105,9 @@ function App() {
 
   useEffect(() => {
     let active = true;
-    const loadBackendState = () => backendApi.state().then((state) => { if (active) applyLiveState(state); }).catch(() => {});
+    const loadBackendState = () => backendApi.state()
+      .then((state) => { if (active) applyLiveState(state); })
+      .catch((error) => { if (active) showNotice(error.message || "Could not load your saved Workboard data"); });
     loadBackendState();
     const retry = window.setTimeout(loadBackendState, 1200);
     return () => { active = false; window.clearTimeout(retry); };
