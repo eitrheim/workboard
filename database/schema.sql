@@ -21,8 +21,23 @@ create table if not exists tasks (
   notes text not null default '',
   notes_ai boolean not null default false,
   parent_task_id uuid references tasks(id),
+  recurring_task_id uuid,
   source_kind text,
   source_id text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists recurring_tasks (
+  id uuid primary key default gen_random_uuid(),
+  owner_id text not null,
+  title text not null,
+  project text not null,
+  owner_name text not null,
+  effort_hours numeric(6,2) not null check (effort_hours > 0),
+  weekday integer not null check (weekday between 0 and 6),
+  active boolean not null default true,
+  last_created_date date,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

@@ -154,6 +154,13 @@ button, input, select { font: inherit; } button { cursor: pointer; } button:focu
   .connection-gate-card { padding: 25px 21px; border-radius: 17px; }
 }
 .register-toolbar { align-items: end; }
+.register-toolbar-actions, .saved-filter-row { display: flex; align-items: center; gap: 9px; }
+.saved-filter-row { overflow-x: auto; padding-bottom: 2px; }
+.recurring-label { flex: 0 0 auto; padding: 3px 7px; border-radius: 999px; color: #156d67; background: #e2f5f1; font-size: 10px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+.recurring-presets { display: flex; flex-wrap: wrap; gap: 7px; margin: -7px 0 18px; }
+.recurring-presets button { min-height: 31px; padding: 0 10px; border: 1px solid #c7ddd9; border-radius: 999px; color: #176e67; background: #f4fbfa; font-size: 11px; }
+.recurring-presets button:hover { border-color: #087b72; background: #e5f5f1; }
+.recurring-note { color: #77756f; font-size: 12px; }
 .project-filter { position: relative; display: grid; min-width: 220px; gap: 6px; color: #77756f; font-size: 12px; font-weight: 600; }
 .project-filter select { width: 100%; min-height: 42px; padding: 0 38px 0 13px; appearance: none; border: 1px solid #d5d4d0; border-radius: 10px; color: #242321; background: #fff; font-size: 14px; }
 .project-filter svg { position: absolute; right: 13px; bottom: 12px; pointer-events: none; color: #77756f; }
@@ -165,6 +172,8 @@ button, input, select { font: inherit; } button { cursor: pointer; } button:focu
 @media (max-width: 780px) {
   .project-filter { width: 100%; margin-bottom: 12px; }
   .register-toolbar > .secondary-button { width: 100%; }
+  .register-toolbar-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .register-toolbar-actions .secondary-button { width: 100%; padding-inline: 9px; }
   .queue-card { padding: 15px; }
   .queue-card h2 { font-size: 18px; }
   .card-actions { margin-top: 12px; }

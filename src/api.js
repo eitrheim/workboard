@@ -25,6 +25,7 @@ export const backendApi = {
   teams: () => request("/api/graph/teams"),
   files: () => request("/api/graph/files"),
   createTask: (task) => request("/api/tasks", { method: "POST", body: JSON.stringify(task) }),
+  createRecurringTask: (task) => request("/api/recurring-tasks", { method: "POST", body: JSON.stringify(task) }),
   updateTask: (id, task) => request(`/api/tasks/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(task) }),
   completeTask: (id) => request(`/api/tasks/${encodeURIComponent(id)}/complete`, { method: "POST" }),
   undoCompleted: (id) => request(`/api/completed/${encodeURIComponent(id)}/undo`, { method: "POST" }),
