@@ -18,6 +18,7 @@ export const backendApi = {
   extractFile: (fileName, mimeType, text, dataUrl, projectOptions = []) => request("/api/file-extract", { method: "POST", body: JSON.stringify({ fileName, mimeType, text, dataUrl, projectOptions }) }),
   createMilestone: (values) => request("/api/milestones", { method: "POST", body: JSON.stringify(values) }),
   updateMilestone: (id, values) => request(`/api/milestones/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(values) }),
+  deleteMilestone: (id) => request(`/api/milestones/${encodeURIComponent(id)}`, { method: "DELETE" }),
   sync: () => request("/api/sync", { method: "POST" }),
   mail: () => request("/api/graph/mail"),
   calendar: (start, end) => request(`/api/graph/calendar?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`),

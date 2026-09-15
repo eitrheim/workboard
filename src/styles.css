@@ -441,7 +441,9 @@ button, input, select { font: inherit; } button { cursor: pointer; } button:focu
 .milestone-entry.urgency-further .milestone-card { border-left-color: #2a65a0; }
 .milestone-edit-grid { display: grid; grid-template-columns: minmax(0, 1.8fr) 150px 180px 125px; gap: 9px; align-items: center; }
 .milestone-edit-grid input, .milestone-edit-grid select, .milestone-list-edit-row input, .milestone-list-edit-row select { min-height: 37px; min-width: 0; padding: 0 9px; border: 1px solid #d5d4d0; border-radius: 8px; color: #292a27; background: #fff; font-size: 12px; }
-.milestone-edit-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
+.milestone-edit-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; }
+.milestone-edit-primary-actions { display: flex; gap: 8px; margin-left: auto; }
+.milestone-delete-button { min-height: 35px; }
 .milestone-edit-actions .primary-button, .milestone-edit-actions .secondary-button { min-height: 35px; padding-inline: 12px; font-size: 11px; }
 .milestone-list-wrap { overflow-x: auto; }
 .milestone-list { min-width: 760px; overflow: hidden; border: 1px solid #e1e0dc; border-radius: 14px; background: #fff; }
