@@ -603,7 +603,7 @@ function ProjectView({ project, onProjectChange, projects, tasks, completed, mil
   const projectTasks = tasks.filter((task) => task.project === project);
   const projectCompleted = completed.filter((item) => item.project === project);
   const projectMilestones = milestones.filter((milestone) => milestone.project === project).map((milestone) => ({ ...milestone, linkedCount: milestone.linkedTaskIds.filter((taskId) => tasks.some((task) => task.id === taskId)).length })).sort((left, right) => (left.dateKey || "9999-12-31").localeCompare(right.dateKey || "9999-12-31"));
-  const nextMilestone = projectMilestones[0];
+  const nextMilestone = projectMilestones.find((milestone) => milestone.dateKey && milestone.dateKey >= todayKey());
   const projectScore = projectCompleted.reduce((sum, item) => sum + Number(item.points || 0), 0);
   const submitProject = (event) => { event.preventDefault(); if (!newProjectName.trim()) return; onCreateProject(newProjectName.trim()); setNewProjectName(""); };
   const dropProject = (status) => { if (projectDrag) onUpdateProjectStatus(projectDrag.name, status); setProjectDrag(null); };
