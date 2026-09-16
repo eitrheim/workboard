@@ -27,6 +27,7 @@ export const backendApi = {
   createTask: (task) => request("/api/tasks", { method: "POST", body: JSON.stringify(task) }),
   createRecurringTask: (task) => request("/api/recurring-tasks", { method: "POST", body: JSON.stringify(task) }),
   updateTask: (id, task) => request(`/api/tasks/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(task) }),
+  deleteTask: (id) => request(`/api/tasks/${encodeURIComponent(id)}`, { method: "DELETE" }),
   completeTask: (id) => request(`/api/tasks/${encodeURIComponent(id)}/complete`, { method: "POST" }),
   undoCompleted: (id) => request(`/api/completed/${encodeURIComponent(id)}/undo`, { method: "POST" }),
   approveSourceItem: (sourceItemId, extractedIndex, values) => request(`/api/source-items/${encodeURIComponent(sourceItemId)}/approve`, { method: "POST", body: JSON.stringify({ extractedIndex, values }) }),
