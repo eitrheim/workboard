@@ -422,7 +422,8 @@ function TaskExtraction({ projects, onSendToQueue, onRemove, onNotice }) {
     try {
       const url = URL.createObjectURL(file);
       const preview = await parseFilePreview(file);
-      const dataUrl = file.size <= 6 * 1024 * 1024 && preview.kind !== "text" ? await new Promise((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => resolve(""); reader.readAsDataURL(file); }) : "";
+      const dataUrl = preview.kind === "image" ? await prepareImageForExtraction(file) : file.size <= 6 * 1024 * 1024 && preview.kind !== "text" ? await fileDataUrl(file) : "";
+      if (preview.kind === "image" && !dataUrl) throw new Error("Could not prepare this image for AI extraction. Try a PNG, JPEG, or WebP screenshot under 6 MB.");
       setFileState({ name: file.name, size: formatFileSize(file.size), url, kind: preview.kind, page: 1, pageCount: preview.pages.length || 1, pages: preview.pages, text: preview.text });
       const result = await backendApi.extractFile(file.name, file.type || "text/markdown", preview.text, dataUrl, projects);
       const fallbackItems = /\.(md|markdown)$/i.test(file.name) ? extractTaskItems(file.name, preview.text) : [];
@@ -500,6 +501,32 @@ function filePreviewKind(file) {
 
 function fileKindLabel(kind) {
   return kind === "pdf" ? "PDF" : kind === "text" ? "Text file" : kind === "image" ? "Image" : "Office file";
+}
+
+function fileDataUrl(file) {
+  return new Promise((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result || "")); reader.onerror = () => resolve(""); reader.readAsDataURL(file); });
+}
+
+async function prepareImageForExtraction(file) {
+  const supportedSource = ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type);
+  if (supportedSource && file.size <= 5 * 1024 * 1024) return fileDataUrl(file);
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (!bitmap) return file.size <= 6 * 1024 * 1024 ? fileDataUrl(file) : "";
+  let longestSide = Math.min(2800, Math.max(bitmap.width, bitmap.height));
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const scale = longestSide / Math.max(bitmap.width, bitmap.height);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    for (const quality of [.9, .8, .7]) {
+      const dataUrl = canvas.toDataURL("image/jpeg", quality);
+      if ((dataUrl.length * 3) / 4 <= 5 * 1024 * 1024) { bitmap.close?.(); return dataUrl; }
+    }
+    longestSide = Math.round(longestSide * .72);
+  }
+  bitmap.close?.();
+  return "";
 }
 
 async function parseFilePreview(file) {
