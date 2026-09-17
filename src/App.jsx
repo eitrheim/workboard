@@ -133,7 +133,7 @@ function App() {
   };
 
   const sendExtractedToQueue = (items, fileName, navigate = true) => {
-    const entries = items.map((item, index) => { const isMilestone = item.type === "MILESTONE"; return { id: item.sourceItemId ? `${item.sourceItemId}:${item.extractedIndex}` : `file-draft-${Date.now()}-${index}`, sourceItemId: item.sourceItemId, extractedIndex: item.extractedIndex, type: "draft", itemKind: isMilestone ? "MILESTONE" : "TASK", source: `Dropped file · ${fileName}`, sourceKind: "file", title: item.title, project: item.project || "", owner: item.owner || "", deadline: item.dateLabel || "", deadlineKey: item.dateKey || null, effortHours: item.effortHours || 1, notes: item.evidence || "", notesAi: Boolean(item.evidence), badge: "AI drafted", detail: `${isMilestone ? "Milestone" : "Task"}${isMilestone ? "" : ` · ${item.owner || "Owner unclear"}`} · ${item.dateLabel || "Date unclear"}` }; });
+    const entries = items.map((item, index) => { const isMilestone = item.type === "MILESTONE"; const owner = isMilestone ? item.owner || "" : extractedTaskOwner(item.owner); return { id: item.sourceItemId ? `${item.sourceItemId}:${item.extractedIndex}` : `file-draft-${Date.now()}-${index}`, sourceItemId: item.sourceItemId, extractedIndex: item.extractedIndex, type: "draft", itemKind: isMilestone ? "MILESTONE" : "TASK", source: `Dropped file · ${fileName}`, sourceKind: "file", title: item.title, project: item.project || "", owner, deadline: item.dateLabel || "", deadlineKey: item.dateKey || null, effortHours: item.effortHours || 1, notes: item.evidence || "", notesAi: Boolean(item.evidence), badge: "AI drafted", detail: `${isMilestone ? "Milestone" : "Task"}${isMilestone ? "" : ` · ${owner}`} · ${item.dateLabel || "Date unclear"}` }; });
     setQueue((current) => [...entries, ...current]);
     if (navigate) setScreen("review");
     showNotice(`${entries.length} extracted ${entries.length === 1 ? "item was" : "items were"} sent to the review queue`);
@@ -427,12 +427,12 @@ function TaskExtraction({ projects, onSendToQueue, onRemove, onNotice }) {
       setFileState({ name: file.name, size: formatFileSize(file.size), url, kind: preview.kind, page: 1, pageCount: preview.pages.length || 1, pages: preview.pages, text: preview.text });
       const result = await backendApi.extractFile(file.name, file.type || "text/markdown", preview.text, dataUrl, projects);
       const fallbackItems = /\.(md|markdown)$/i.test(file.name) ? extractTaskItems(file.name, preview.text) : [];
-      const extractedItems = result.items?.length ? result.items : fallbackItems;
+      const extractedItems = (result.items?.length ? result.items : fallbackItems).map(withDefaultExtractedOwner);
       setItems(extractedItems);
       onNotice(`AI completed a full pass and extracted ${extractedItems.length} items from ${file.name}`);
     } catch (error) {
       const fallbackItems = /\.(md|markdown)$/i.test(file.name) ? extractTaskItems(file.name, (await parseFilePreview(file)).text) : [];
-      if (fallbackItems.length) { setItems(fallbackItems); onNotice(`Backend unavailable; extracted ${fallbackItems.length} Markdown tasks locally`); } else onNotice(error.message || "Could not extract tasks from this file");
+      if (fallbackItems.length) { setItems(fallbackItems.map(withDefaultExtractedOwner)); onNotice(`Backend unavailable; extracted ${fallbackItems.length} Markdown tasks locally`); } else onNotice(error.message || "Could not extract tasks from this file");
     } finally { setExtractingFile(false); }
   };
 
@@ -444,10 +444,10 @@ function TaskExtraction({ projects, onSendToQueue, onRemove, onNotice }) {
     try {
       const result = await backendApi.extractFile("Pasted text.md", "text/markdown", text, "", projects);
       setFileState({ name: "Pasted text.md", size: `${text.length} characters`, url: "", kind: "text", page: 1, pageCount: 1, pages: [text.split(/\r?\n/)], text });
-      const extractedItems = result.items?.length ? result.items : extractTaskItems("Pasted text.md", text);
+      const extractedItems = (result.items?.length ? result.items : extractTaskItems("Pasted text.md", text)).map(withDefaultExtractedOwner);
       setItems(extractedItems);
       onNotice(`AI completed a full pass and extracted ${extractedItems.length} items from pasted text`);
-    } catch (error) { const fallbackItems = extractTaskItems("Pasted text.md", text); if (fallbackItems.length) { setFileState({ name: "Pasted text.md", size: `${text.length} characters`, url: "", kind: "text", page: 1, pageCount: 1, pages: [text.split(/\r?\n/)], text }); setItems(fallbackItems); onNotice(`Backend unavailable; extracted ${fallbackItems.length} Markdown tasks locally`); } else onNotice(error.message || "Could not extract tasks from pasted text"); }
+    } catch (error) { const fallbackItems = extractTaskItems("Pasted text.md", text); if (fallbackItems.length) { setFileState({ name: "Pasted text.md", size: `${text.length} characters`, url: "", kind: "text", page: 1, pageCount: 1, pages: [text.split(/\r?\n/)], text }); setItems(fallbackItems.map(withDefaultExtractedOwner)); onNotice(`Backend unavailable; extracted ${fallbackItems.length} Markdown tasks locally`); } else onNotice(error.message || "Could not extract tasks from pasted text"); }
     finally { setExtractingText(false); }
   };
   const handleDrop = (event) => {
@@ -615,6 +615,9 @@ function extractTaskItems(fileName, rawText) {
   }).filter(Boolean);
   return parsed;
 }
+
+function extractedTaskOwner(owner) { const value = String(owner || "").trim(); return /^(unknown|unassigned|not found|n\/?a)$/i.test(value) || !value ? "Ann" : value; }
+function withDefaultExtractedOwner(item) { return item.type === "MILESTONE" ? item : { ...item, owner: extractedTaskOwner(item.owner) }; }
 
 function ReviewQueue({ queue, onApprove, onDismiss, onRetry, onModal }) {
   const [filter, setFilter] = useState("all");

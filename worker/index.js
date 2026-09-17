@@ -30,6 +30,7 @@ function effort(value) {
   const amount = match ? Number(match[0]) : Number(value);
   return Number.isFinite(amount) && amount > 0 ? amount : 1;
 }
+function extractedOwner(value) { const owner = String(value || "").trim(); return /^(unknown|unassigned|not found|n\/?a)$/i.test(owner) || !owner ? "Ann" : owner; }
 function points(hours) { return effort(hours) >= 4 ? 40 : effort(hours) > 1 ? 20 : 10; }
 function ann(owner) { return String(owner || "").trim().toLowerCase() === "ann"; }
 function task(row) { return { id: row.id, title: row.title, project: row.project, deadline: dateLabel(row.deadline), deadlineKey: dateOnly(row.deadline), owner: row.owner_name, effortHours: Number(row.effort_hours), points: points(row.effort_hours), status: row.status, blocker: row.blocker || undefined, notes: row.notes || "", notesAi: Boolean(row.notes_ai), parentTaskId: row.parent_task_id || undefined, recurring: Boolean(row.recurring_task_id), sourceKind: row.source_kind || undefined }; }
@@ -101,7 +102,7 @@ async function extract(env, source) {
   const content = source.dataUrl ? [{ type: "input_text", text: `Source: ${source.label}\nText: ${source.content || "(Inspect uploaded file.)"}` }, ...(imageSource ? [{ type: "input_image", image_url: source.dataUrl, detail: "high" }] : [{ type: "input_file", filename: source.fileName || "uploaded-file", file_data: source.dataUrl }])] : `Source: ${source.label}\n${source.content || ""}`;
   const response = await fetch("https://api.openai.com/v1/responses", { method: "POST", headers: { authorization: `Bearer ${env.OPENAI_API_KEY}`, "content-type": "application/json" }, body: JSON.stringify({ model: env.OPENAI_MODEL || "gpt-5.4-mini", store: false, reasoning: { effort: "medium" }, instructions: instruction, input: source.dataUrl ? [{ role: "user", content }] : content, text: { format: { type: "json_schema", name: "work_items", strict: true, schema: extractionSchema } } }) });
   if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error?.error?.message || "OpenAI extraction failed"); }
-  const data = await response.json(); const outputText = data.output_text || (data.output || []).flatMap((entry) => entry.content || []).filter((entry) => entry.type === "output_text").map((entry) => entry.text || "").join(""); const parsed = JSON.parse(outputText || "{\"items\":[]}"); return Array.isArray(parsed.items) ? parsed.items.slice(0, 40) : [];
+  const data = await response.json(); const outputText = data.output_text || (data.output || []).flatMap((entry) => entry.content || []).filter((entry) => entry.type === "output_text").map((entry) => entry.text || "").join(""); const parsed = JSON.parse(outputText || "{\"items\":[]}"); return Array.isArray(parsed.items) ? parsed.items.slice(0, 40).map((item) => item.type === "TASK" ? { ...item, owner: extractedOwner(item.owner) } : item) : [];
 }
 async function liveState(env) {
   const [taskRows, completedRows, scoreRows, sources, projects, milestoneRows] = await Promise.all([
