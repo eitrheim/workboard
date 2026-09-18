@@ -1,5 +1,12 @@
 # Design QA
 
+## September 18, 2026: Work register header
+
+- Reference: `/Users/aeitrheim/Downloads/Screenshot 2026-09-18 at 11.30.43 AM.png`
+- Visual verification: passed in the local browser preview at desktop width.
+- Implemented: date and title, Refresh/New repeat task/New task actions, four live summary cards, compact project selector, and saved filters with a live Due this week count.
+- Responsive implementation: summary cards collapse to two columns and controls wrap on mobile.
+
 ## Source visual truth
 
 - Review queue: `/var/folders/lc/0tlf8lf16yn0y9qbzz_b7mfr0000gp/T/TemporaryItems/NSIRD_screencaptureui_RgpQbQ/Screenshot 2026-08-28 at 1.05.39 PM.png`
