@@ -70,3 +70,33 @@ The app build, Sites packaging, and static route contract pass. Browser-rendered
 ## Final result
 
 Visual browser QA remains blocked in this session. Live data QA is pending the Microsoft Entra app registration and OpenAI key; the app now uses a live-only setup gate with no seeded records.
+
+---
+
+## September 18, 2026: Project View summary
+
+### Comparison evidence
+
+- Source visual truth: `/var/folders/lc/0tlf8lf16yn0y9qbzz_b7mfr0000gp/T/TemporaryItems/NSIRD_screencaptureui_9OiwYb/Screenshot 2026-09-18 at 1.12.37 PM.png`
+- Implementation: browser-rendered local Vite preview at `http://127.0.0.1:5174/`, Project View route
+- Capture: transient computer-use browser screenshot at a 1280 × 720 CSS-pixel viewport; no durable screenshot file was produced by the browser surface
+- State: no local backend records were available, so the Project View rendered its empty-data state. The header, colored stat cards, section frame, spacing, and two-column milestone grid were inspected directly.
+- Focused layout inspection: the local render reported a two-column milestone grid, pale-yellow Open card, pale-green Completed card, and no browser console errors.
+
+### Findings and resolution
+
+- [Resolved] The previous header had neutral cards, an oversized next-event line, and a separate event count badge. It now uses the compact title area, yellow Open card, green Completed card, and detailed next-milestone card from the reference.
+- [Resolved] The milestone strip is now a padded two-column card area. Cards include urgency dots, readable metadata, and semantic timing pills such as `3 days overdue` and `Due in 7 days`.
+- [Resolved] Overdue project cards use the reference's neutral dot while retaining a red overdue label.
+
+### Fidelity surfaces
+
+- Typography: preserves the existing Workboard type scale while tightening the stat and event hierarchy to match the reference.
+- Spacing and layout rhythm: aligned compact header cards with a 25 px milestone container and 18 px two-column card gap.
+- Colors and tokens: Open uses the existing warm yellow semantic token; Completed uses the existing pale green token; urgency labels retain the app's red, amber, and blue semantic colors.
+- Image quality and asset fidelity: no raster assets are present in the reference region.
+- Copy and content: labels now read `Next milestone`; live project, milestone, and task data remain dynamic.
+
+### Final result
+
+passed
