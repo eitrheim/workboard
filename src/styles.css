@@ -398,6 +398,34 @@ button, input, select { font: inherit; } button { cursor: pointer; } button:focu
 .quick-approve-button:hover { color: #fff; border-color: #087b72; background: #087b72; }
 .quick-remove-button { display: grid; place-items: center; flex: 0 0 auto; width: 36px; height: 36px; border: 1px solid #efb7b2; border-radius: 50%; color: #b32f27; background: #fff7f6; }
 .quick-remove-button:hover { color: #fff; border-color: #b32f27; background: #b32f27; }
+.items-pane { padding: 0; overflow: hidden; }
+.extracted-header { align-items: center; padding: 24px 27px; }
+.extracted-header .eyebrow { max-width: 340px; overflow: hidden; color: #87847a; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.extracted-header h2 { font-size: 25px; }
+.extracted-approve-all { min-height: 42px; padding-inline: 15px; font-size: 12px; }
+.extracted-list { gap: 0; max-height: 560px; padding: 0; }
+.extracted-item-card { align-items: flex-start; gap: 12px; min-height: 0; padding: 22px 27px; border: 0; border-bottom: 1px solid #ecebe8; border-radius: 0; }
+.extracted-item-card:last-child { border-bottom: 0; }
+.extracted-item-card.missing-item { background: #fff; }
+.extracted-item-select { width: 22px; height: 22px; flex: 0 0 auto; margin-top: 4px; border: 2px solid #e1ddd4; border-radius: 6px; background: #fff; }
+.extracted-item-main { width: 100%; }
+.extracted-item-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.extracted-item-card h3 { margin: 0; font-size: 16px; line-height: 1.25; }
+.extraction-confidence { flex: 0 0 auto; margin-top: -1px; padding: 4px 9px; border-radius: 6px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.high-confidence { color: #277436; background: #e8f6e9; }
+.needs-details { color: #9b670b; background: #fff3d8; }
+.extracted-item-meta { gap: 8px; margin-top: 13px; }
+.extracted-item-meta span { padding: 5px 10px; border-radius: 7px; color: #4f4e49; background: #f3f2ee; font-size: 11px; font-weight: 600; }
+.extracted-item-meta span + span::before { content: none; }
+.extracted-item-meta .missing-date-chip { color: #b52f28; background: #fff0ee; }
+.extracted-item-actions { gap: 8px; margin-top: 13px; }
+.extracted-item-actions button { min-height: 34px; padding: 0 13px; border: 1px solid #dcd9d1; border-radius: 8px; background: #fff; color: #5b5953; font-size: 11px; font-weight: 700; }
+.extracted-item-actions .extract-card-approve { border-color: #171717; color: #fff; background: #171717; }
+.extracted-item-actions .extract-card-approve:hover { border-color: #353532; background: #353532; }
+.extracted-item-actions .extract-card-discard { color: #8c897f; }
+.extracted-item-actions .extract-card-discard:hover { border-color: #b52f28; color: #b52f28; background: #fff7f6; }
+.items-pane .extraction-method-note { margin: 14px 27px; }
+.items-pane .extracted-empty { min-height: 380px; padding: 0 27px; }
 .extracted-empty { min-height: 380px; display: grid; place-items: center; align-content: center; gap: 10px; color: #aaa8a0; text-align: center; }
 .extracted-empty p { max-width: 210px; margin: 0; color: #98968f; font-size: 13px; line-height: 1.45; }
 .extracted-empty.compact { min-height: 260px; }
@@ -430,9 +458,16 @@ button, input, select { font: inherit; } button { cursor: pointer; } button:focu
   .document-page-stack { min-height: 0; padding: 12px; }
   .document-page { min-height: 280px; padding: 20px 18px; }
   .document-page p { font-size: 11px; }
-  .items-pane { padding: 18px 14px; border-radius: 15px; }
+  .items-pane { padding: 0; border-radius: 15px; }
+  .extracted-header { align-items: flex-start; padding: 18px 15px; }
+  .extracted-header .eyebrow { max-width: 180px; }
+  .extracted-approve-all { min-height: 38px; padding-inline: 10px; font-size: 11px; }
   .extracted-header h2 { font-size: 21px; }
-  .extracted-item-card { min-height: 112px; padding-left: 13px; }
+  .extracted-item-card { min-height: 112px; padding: 17px 15px; }
+  .extracted-item-title-row { display: block; }
+  .extraction-confidence { display: inline-block; margin-top: 7px; }
+  .items-pane .extraction-method-note { margin-inline: 15px; }
+  .items-pane .extracted-empty { padding-inline: 15px; }
   .extraction-bottom-bar { display: grid; gap: 14px; padding: 16px; }
   .extraction-actions { width: 100%; }
   .extraction-actions button { flex: 1; }

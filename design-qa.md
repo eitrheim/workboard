@@ -12,6 +12,12 @@
 - Visual verification: passed in the local browser preview at desktop width.
 - Implemented: numeric vertical scale, horizontal comparison gridlines, and a Carryover explanation for open tasks that were already overdue at the period start.
 
+## September 18, 2026: Extracted items pane
+
+- Reference: `/Users/aeitrheim/Downloads/Screenshot 2026-09-18 at 12.50.22 PM.png`
+- Visual verification: passed with three locally parsed Markdown tasks.
+- Implemented: file-aware header, compact confidence badges and detail chips, visually separated result rows, per-item Approve/Edit/Discard actions, and header-level Approve all.
+
 ## Source visual truth
 
 - Review queue: `/var/folders/lc/0tlf8lf16yn0y9qbzz_b7mfr0000gp/T/TemporaryItems/NSIRD_screencaptureui_RgpQbQ/Screenshot 2026-08-28 at 1.05.39 PM.png`
