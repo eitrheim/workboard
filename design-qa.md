@@ -103,6 +103,18 @@ passed
 
 ---
 
+## September 18, 2026: Project milestone timing
+
+- Root cause: legacy D1 milestone records stored timestamp values such as `2026-09-25T07:00:00.000Z`; the client appended another time fragment when calculating relative days.
+- Fix: normalize Worker milestone dates and client milestone state to an ISO date-only key before displaying or calculating timing.
+- Verification: `node --check worker/index.js`, Sites tests, and production build passed. Existing milestones are normalized at read time, so no database migration is needed.
+
+### Final result
+
+passed
+
+---
+
 ## September 18, 2026: Project score summary
 
 - Source visual truth: `/Users/aeitrheim/Downloads/Screenshot 2026-09-18 at 1.20.07 PM.png`

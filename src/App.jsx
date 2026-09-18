@@ -65,7 +65,7 @@ function App() {
     const liveTasks = state?.tasks || [];
     setQueue(state?.queue || []);
     setTasks(liveTasks);
-    setMilestones(state?.milestones || []);
+    setMilestones((state?.milestones || []).map(normalizeMilestone));
     setCompleted(state?.completed || []);
     setScoreEvents(state?.scoreEvents || []);
     setProjects(state?.projects || []);
@@ -261,10 +261,10 @@ function App() {
   };
 
   const addMilestone = async (values) => {
-    try { const milestone = await backendApi.createMilestone(values); setMilestones((current) => [...current, milestone]); showNotice("Milestone added"); } catch (error) { showNotice(error.message || "Could not add milestone"); }
+    try { const milestone = await backendApi.createMilestone(values); setMilestones((current) => [...current, normalizeMilestone(milestone)]); showNotice("Milestone added"); } catch (error) { showNotice(error.message || "Could not add milestone"); }
   };
   const updateMilestone = async (milestoneId, values) => {
-    try { const milestone = await backendApi.updateMilestone(milestoneId, values); setMilestones((current) => current.map((item) => item.id === milestoneId ? milestone : item)); showNotice("Milestone updated"); } catch (error) { showNotice(error.message || "Could not update milestone"); }
+    try { const milestone = await backendApi.updateMilestone(milestoneId, values); setMilestones((current) => current.map((item) => item.id === milestoneId ? normalizeMilestone(milestone) : item)); showNotice("Milestone updated"); } catch (error) { showNotice(error.message || "Could not update milestone"); }
   };
   const deleteMilestone = async (milestoneId) => {
     try { await backendApi.deleteMilestone(milestoneId); setMilestones((current) => current.filter((item) => item.id !== milestoneId)); showNotice("Milestone deleted"); } catch (error) { showNotice(error.message || "Could not delete milestone"); }
@@ -930,6 +930,11 @@ function deadlineKeyFromLabel(value, fallback = null) {
   const parsed = Date.parse(`${value} ${new Date().getFullYear()}`);
   return Number.isNaN(parsed) ? fallback : new Date(parsed).toISOString().slice(0, 10);
 }
+function normalizedDateKey(value, fallback = null) {
+  const match = String(value || "").trim().match(/^\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : deadlineKeyFromLabel(value) || deadlineKeyFromLabel(fallback);
+}
+function normalizeMilestone(milestone) { return { ...milestone, dateKey: normalizedDateKey(milestone?.dateKey, milestone?.date) }; }
 function calendarDateValue(value, dateKey) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ""))) return dateKey;
   if (/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) return value;
