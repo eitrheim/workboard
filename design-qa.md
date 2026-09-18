@@ -7,6 +7,11 @@
 - Implemented: date and title, Refresh/New repeat task/New task actions, four live summary cards, compact project selector, and saved filters with a live Due this week count.
 - Responsive implementation: summary cards collapse to two columns and controls wrap on mobile.
 
+## September 18, 2026: Score chart
+
+- Visual verification: passed in the local browser preview at desktop width.
+- Implemented: numeric vertical scale, horizontal comparison gridlines, and a Carryover explanation for open tasks that were already overdue at the period start.
+
 ## Source visual truth
 
 - Review queue: `/var/folders/lc/0tlf8lf16yn0y9qbzz_b7mfr0000gp/T/TemporaryItems/NSIRD_screencaptureui_RgpQbQ/Screenshot 2026-08-28 at 1.05.39 PM.png`
