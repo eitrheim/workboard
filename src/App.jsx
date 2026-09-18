@@ -132,9 +132,17 @@ function App() {
     }
   };
 
-  const sendExtractedToQueue = (items, fileName, navigate = true) => {
+  const sendExtractedToQueue = async (items, fileName, navigate = true) => {
     const entries = items.map((item, index) => { const isMilestone = item.type === "MILESTONE"; const owner = isMilestone ? item.owner || "" : extractedTaskOwner(item.owner); return { id: item.sourceItemId ? `${item.sourceItemId}:${item.extractedIndex}` : `file-draft-${Date.now()}-${index}`, sourceItemId: item.sourceItemId, extractedIndex: item.extractedIndex, type: "draft", itemKind: isMilestone ? "MILESTONE" : "TASK", source: `Dropped file · ${fileName}`, sourceKind: "file", title: item.title, project: item.project || "", owner, deadline: item.dateLabel || "", deadlineKey: item.dateKey || null, effortHours: item.effortHours || 1, notes: item.evidence || "", notesAi: Boolean(item.evidence), badge: "AI drafted", detail: `${isMilestone ? "Milestone" : "Task"}${isMilestone ? "" : ` · ${owner}`} · ${item.dateLabel || "Date unclear"}` }; });
-    setQueue((current) => [...entries, ...current]);
+    if (items.every((item) => item.sourceItemId)) {
+      try {
+        await refreshLiveState();
+      } catch {
+        setQueue((current) => [...entries.filter((entry) => !current.some((queued) => queued.id === entry.id)), ...current]);
+      }
+    } else {
+      setQueue((current) => [...entries.filter((entry) => !current.some((queued) => queued.id === entry.id)), ...current]);
+    }
     if (navigate) setScreen("review");
     showNotice(`${entries.length} extracted ${entries.length === 1 ? "item was" : "items were"} sent to the review queue`);
   };
@@ -455,17 +463,17 @@ function TaskExtraction({ projects, onSendToQueue, onRemove, onNotice }) {
     setDragActive(false);
     loadFile(event.dataTransfer.files?.[0]);
   };
-  const approveOne = (item) => {
-    onSendToQueue([item], fileState.name, false);
+  const approveOne = async (item) => {
+    await onSendToQueue([item], fileState.name, false);
     setItems((current) => current.filter((entry) => entry.id !== item.id));
   };
   const removeOne = async (item) => {
     await onRemove(item.id, item);
     setItems((current) => current.filter((entry) => entry.id !== item.id));
   };
-  const approveAll = () => {
+  const approveAll = async () => {
     const count = items.length;
-    onSendToQueue(items, fileState.name);
+    await onSendToQueue(items, fileState.name);
     setItems([]);
     onNotice(`${count} extracted ${count === 1 ? "item was" : "items were"} added to the review queue`);
   };

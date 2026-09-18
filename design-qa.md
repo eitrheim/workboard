@@ -18,6 +18,11 @@
 - Visual verification: passed with three locally parsed Markdown tasks.
 - Implemented: file-aware header, compact confidence badges and detail chips, visually separated result rows, per-item Approve/Edit/Discard actions, and header-level Approve all.
 
+## September 18, 2026: Extracted queue deduplication
+
+- Fixed: server-backed extraction no longer creates a second optimistic Review queue item.
+- Verification: static Site tests and production build passed; persisted source items now refresh the canonical queue state.
+
 ## Source visual truth
 
 - Review queue: `/var/folders/lc/0tlf8lf16yn0y9qbzz_b7mfr0000gp/T/TemporaryItems/NSIRD_screencaptureui_RgpQbQ/Screenshot 2026-08-28 at 1.05.39 PM.png`
