@@ -103,6 +103,19 @@ passed
 
 ---
 
+## September 18, 2026: Overview four-card summary
+
+- Source visual truth: `/var/folders/lc/0tlf8lf16yn0y9qbzz_b7mfr0000gp/T/TemporaryItems/NSIRD_screencaptureui_Zbfpr6/Screenshot 2026-09-18 at 1.46.46 PM.png`
+- Implementation: local Overview at `http://127.0.0.1:5174/`, inspected in the in-app browser at 1280 × 720 CSS pixels.
+- Verified: four compact, clickable cards for Review queue, Work register, Milestones, and Score. The queue and register cards use the requested green and yellow emphasis. The score card retains the seven-day total and trend.
+- Dynamic-data note: the local preview could not reach its hosted API, so it rendered empty live state. The card layout, labels, empty state, and score plot were visually verified. Populated milestone entries use the existing live milestone data and timing helpers.
+
+### Final result
+
+passed
+
+---
+
 ## September 18, 2026: Project milestone timing
 
 - Root cause: legacy D1 milestone records stored timestamp values such as `2026-09-25T07:00:00.000Z`; the client appended another time fragment when calculating relative days.
