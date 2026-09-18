@@ -52,32 +52,41 @@ button, input, select { font: inherit; } button { cursor: pointer; } button:focu
 }
 
 .project-screen { gap: 24px; }
-.project-view-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding-bottom: 22px; border-bottom: 1px solid #e5e4e0; }
+.project-view-header { display: flex; align-items: center; justify-content: space-between; gap: 32px; padding-bottom: 2px; }
 .project-title-block { display: grid; gap: 8px; }
 .project-title-block .eyebrow { margin-bottom: 0; }
 .project-switcher { position: relative; display: inline-flex; width: fit-content; align-items: center; }
 .project-switcher select { max-width: 100%; padding: 0 34px 0 0; appearance: none; border: 0; color: #171717; background: transparent; font-size: clamp(28px, 3.2vw, 42px); font-weight: 600; letter-spacing: -.055em; outline: none; }
 .project-switcher select option { font-size: 16px; font-weight: 500; letter-spacing: 0; }
 .project-switcher svg { position: absolute; right: 7px; pointer-events: none; color: #087b72; }
-.project-stats { display: grid; flex: 1; grid-template-columns: minmax(100px, .5fr) minmax(100px, .5fr) minmax(260px, 2fr); gap: 14px; max-width: 720px; }
-.project-stat { display: grid; gap: 7px; padding: 15px 18px; border: 1px solid #e1e0dc; border-radius: 13px; background: #fff; }
+.project-stats { display: grid; flex: 1; grid-template-columns: 160px 160px minmax(270px, 1fr); gap: 14px; max-width: 622px; }
+.project-stat { display: grid; align-content: center; min-height: 86px; gap: 5px; padding: 14px 22px; border: 1px solid #e1e0dc; border-radius: 13px; background: #fff; }
 .project-stat span { color: #8f8d86; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .project-stat strong { color: #242522; font-size: 24px; letter-spacing: -.04em; }
-.project-next-stat strong { overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.project-open-stat { border-color: #efd494; background: #fff7e3; }
+.project-open-stat span, .project-open-stat strong { color: #a66a07; }
+.project-completed-stat { border-color: #c3e0c6; background: #ecf8ee; }
+.project-completed-stat span { color: #4a8754; }
+.project-completed-stat strong { color: #287437; }
+.project-next-stat { gap: 2px; }
+.project-next-stat strong { overflow: hidden; font-size: 16px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.project-next-stat small { overflow: hidden; color: #77756f; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .project-milestones-section, .project-open-section, .project-completed-section, .project-management-section { display: grid; gap: 14px; padding: 20px; border: 1px solid #e1e0dc; border-radius: 16px; background: #fff; }
+.project-milestones-section { gap: 18px; padding: 25px; border-radius: 18px; }
 .project-milestones-section h2, .project-open-section h2 { margin: 0; color: #292a27; font-size: 21px; letter-spacing: -.04em; }
-.project-milestones-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
-.project-milestone-card { min-width: 0; display: flex; align-items: flex-start; gap: 11px; padding: 14px 15px; border: 1px solid #e1e0dc; border-left: 3px solid #9aa29d; border-radius: 12px; background: #fff; }
-.project-milestone-card.urgency-urgent { border-left-color: #b23831; }
-.project-milestone-card.urgency-approaching { border-left-color: #bd861f; }
-.project-milestone-card.urgency-further { border-left-color: #2a65a0; }
-.project-milestone-dot { flex: 0 0 auto; width: 11px; height: 11px; margin-top: 4px; border-radius: 50%; background: #8b928d; box-shadow: 0 0 0 1px currentColor; }
+.project-milestones-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.project-milestone-card { min-width: 0; display: flex; align-items: flex-start; gap: 10px; min-height: 110px; padding: 18px 20px; border: 1px solid #e1e0dc; border-radius: 13px; background: #fff; }
+.project-milestone-dot { flex: 0 0 auto; width: 10px; height: 10px; margin-top: 5px; border-radius: 50%; background: #8b928d; box-shadow: 0 0 0 1px currentColor; }
 .project-milestone-dot.urgency-urgent { color: #b23831; background: #b23831; }
 .project-milestone-dot.urgency-approaching { color: #bd861f; background: #bd861f; }
 .project-milestone-dot.urgency-further { color: #2a65a0; background: #2a65a0; }
-.project-milestone-card > div { min-width: 0; display: grid; gap: 5px; }
-.project-milestone-card strong { overflow: hidden; color: #292a27; font-size: 13px; line-height: 1.25; text-overflow: ellipsis; }
-.project-milestone-card span:last-child { color: #77756f; font-size: 11px; }
+.project-milestone-card > div { min-width: 0; display: grid; align-content: start; gap: 5px; }
+.project-milestone-card strong { overflow: hidden; color: #292a27; font-size: 15px; line-height: 1.25; text-overflow: ellipsis; }
+.project-milestone-meta { color: #77756f; font-size: 12px; }
+.project-milestone-timing { justify-self: start; padding: 3px 9px; border-radius: 6px; color: #77756f; background: #f0efeb; font-size: 11px; font-weight: 700; }
+.project-milestone-timing.urgency-urgent { color: #b23831; background: #fff0ef; }
+.project-milestone-timing.urgency-approaching { color: #9b6708; background: #fff4da; }
+.project-milestone-timing.urgency-further { color: #2a65a0; background: #eaf2fb; }
 .project-empty-copy { margin: 0; padding: 18px; color: #98968f; border: 1px dashed #d9d8d4; border-radius: 12px; font-size: 12px; }
 .project-task-table { padding-top: 2px; }
 .project-completed-toggle { display: flex; align-items: center; justify-content: space-between; gap: 18px; width: 100%; padding: 2px 0 4px; border: 0; color: #292a27; background: transparent; text-align: left; }
@@ -117,7 +126,7 @@ button, input, select { font: inherit; } button { cursor: pointer; } button:focu
 .project-inline-select { width: 100%; min-width: 0; appearance: auto; }
 @media (max-width: 780px) {
   .project-screen { gap: 19px; }
-  .project-view-header { display: grid; gap: 15px; padding-bottom: 17px; }
+  .project-view-header { display: grid; gap: 15px; padding-bottom: 2px; }
   .project-switcher select { font-size: 29px; }
   .project-switcher svg { width: 16px; }
   .project-stats { grid-template-columns: 1fr 1fr; gap: 8px; }
