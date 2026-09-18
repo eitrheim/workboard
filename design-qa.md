@@ -100,3 +100,16 @@ Visual browser QA remains blocked in this session. Live data QA is pending the M
 ### Final result
 
 passed
+
+---
+
+## September 18, 2026: Project score summary
+
+- Source visual truth: `/Users/aeitrheim/Downloads/Screenshot 2026-09-18 at 1.20.07 PM.png`
+- Implementation: local Project View at `http://127.0.0.1:5174/`, inspected at 1280 × 720 CSS pixels.
+- Verified: the Open card reads `0 Tasks`; the Completed card reads `0 Pts`; the project-contribution progress bar is absent; no browser console errors were reported.
+- Live state note: local preview had no backend records, so zero values were expected. The completed value is calculated from the selected project's completed-task point total.
+
+### Final result
+
+passed

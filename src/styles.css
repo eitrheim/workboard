@@ -63,6 +63,9 @@ button, input, select { font: inherit; } button { cursor: pointer; } button:focu
 .project-stat { display: grid; align-content: center; min-height: 86px; gap: 5px; padding: 14px 22px; border: 1px solid #e1e0dc; border-radius: 13px; background: #fff; }
 .project-stat span { color: #8f8d86; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .project-stat strong { color: #242522; font-size: 24px; letter-spacing: -.04em; }
+.project-stat strong:has(.project-stat-value) { display: inline-flex; align-items: baseline; gap: 11px; }
+.project-stat .project-stat-value { color: inherit; font-size: 24px; }
+.project-stat .project-stat-unit { color: inherit; font-size: 18px; font-weight: 500; letter-spacing: -.03em; text-transform: none; }
 .project-open-stat { border-color: #efd494; background: #fff7e3; }
 .project-open-stat span, .project-open-stat strong { color: #a66a07; }
 .project-completed-stat { border-color: #c3e0c6; background: #ecf8ee; }
@@ -102,12 +105,6 @@ button, input, select { font: inherit; } button { cursor: pointer; } button:focu
 .project-completed-row:last-child { border-bottom: 0; }
 .project-completed-row strong { color: #292a27; }
 .project-completed-row strong:last-child { justify-self: end; color: #66645e; font-weight: 500; }
-.project-score-footer { display: grid; grid-template-columns: auto minmax(160px, 1fr); align-items: center; gap: 20px; padding: 18px 20px; border: 1px solid #d9e4e1; border-radius: 16px; color: #77756f; background: #f7fbfa; }
-.project-score-footer > div:first-child { display: grid; gap: 4px; }
-.project-score-footer span { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.project-score-footer strong { color: #242522; font-size: 20px; }
-.project-score-track { height: 9px; overflow: hidden; border-radius: 99px; background: #e5e9e7; }
-.project-score-track i { display: block; height: 100%; border-radius: inherit; background: #087b72; }
 .project-management-section { margin-top: 2px; background: #fbfbfa; }
 .new-project-form { display: flex; align-items: center; gap: 10px; }
 .new-project-form input { flex: 1; min-height: 42px; padding: 0 13px; border: 1px solid #d5d4d0; border-radius: 10px; color: #242321; background: #fff; }
@@ -141,7 +138,6 @@ button, input, select { font: inherit; } button { cursor: pointer; } button:focu
   .project-milestone-card { flex: 0 0 235px; }
   .project-completed-table { overflow-x: auto; }
   .project-completed-head, .project-completed-row { min-width: 560px; grid-template-columns: minmax(260px, 1fr) 130px 100px; gap: 12px; }
-  .project-score-footer { grid-template-columns: 1fr; gap: 9px; }
   .new-project-form { display: grid; }
   .new-project-form input, .new-project-form .primary-button { width: 100%; }
   .project-status-board { grid-template-columns: 1fr; }
