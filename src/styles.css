@@ -354,8 +354,8 @@ button, input, select { font: inherit; } button { cursor: pointer; } button:focu
   .row-edit-details { width: 24px; height: 24px; }
   .subtask-add-row { display: grid; gap: 3px; padding-left: 12px; }
   .register-table .desktop-register-row { display: none; }
-  .register-table .mobile-register-card { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; margin: 0; padding: 14px 2px; border-bottom: 1px solid #e6e5e1; }
-  .mobile-register-card-content { min-width: 0; display: grid; gap: 10px; padding: 0; color: #20201e; background: transparent; text-align: left; }
+  .register-table .mobile-register-card { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; margin: 4px 0 11px; padding: 16px; border: 1px solid #cfe2dd; border-radius: 15px; background: #fbfefd; box-shadow: 0 1px 2px rgba(26, 76, 69, .04); }
+  .mobile-register-card-content { min-width: 0; display: grid; gap: 10px; padding: 0; border: 0; color: #20201e; background: transparent; font: inherit; text-align: left; }
   .mobile-task-head { min-width: 0; display: flex; align-items: center; gap: 7px; }
   .mobile-task-head strong { min-width: 0; overflow: hidden; font-size: 16px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
   .mobile-task-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; color: #706e68; font-size: 12px; line-height: 1.3; }
