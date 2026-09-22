@@ -8,6 +8,7 @@ import OpenAI from "openai";
 import pg from "pg";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import { dateKeyFromDate as domainDateKeyFromDate, dateLabel as domainDateLabel, dateOnly as domainDateOnly, effortPoints, isAnnOwner, parseDeadline as domainParseDeadline, parseEffort } from "../shared/domain.mjs";
 
 dotenv.config();
@@ -54,6 +55,15 @@ const localFrontendOrigins = new Set([
   "http://127.0.0.1:5173",
 ]);
 const appTimeZone = process.env.APP_TIMEZONE || "America/Los_Angeles";
+const configuredSessionSecret = String(process.env.SESSION_SECRET || "").trim();
+const fallbackSessionSecret = "local-development-only-change-me";
+const isProduction = process.env.NODE_ENV === "production";
+if (isProduction) {
+  if (!configuredSessionSecret || configuredSessionSecret === fallbackSessionSecret) {
+    throw new Error("SESSION_SECRET must be configured with a non-default value in production");
+  }
+  throw new Error("Production startup is disabled until a persistent session store is configured; express-session's in-memory store is for local development only");
+}
 
 app.use((req, res, next) => {
   const requestOrigin = req.get("origin");
@@ -67,10 +77,10 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: "10mb" }));
 app.use(session({
-  secret: process.env.SESSION_SECRET || "local-development-only-change-me",
+  secret: configuredSessionSecret || fallbackSessionSecret,
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 8 * 60 * 60 * 1000 },
+  cookie: { httpOnly: true, sameSite: "lax", secure: isProduction, maxAge: 8 * 60 * 60 * 1000 },
 }));
 
 function graphClient(accessToken) {
@@ -313,11 +323,13 @@ async function readLiveState(req) {
 }
 
 async function persistSource(owner, source) {
-  const existing = await pool.query("select id from source_items where owner_id = $1 and source = $2 and source_id = $3", [owner, source.source, source.id]);
-  if (existing.rows.length) return false;
+  const existing = await pool.query("select id, payload from source_items where owner_id = $1 and source = $2 and source_id = $3", [owner, source.source, source.id]);
+  if (existing.rows.length) return { inserted: false, sourceItemId: existing.rows[0].id, extractedItems: existing.rows[0].payload?.extractedItems || [] };
   const extractedItems = await extractItems(source);
-  await pool.query("insert into source_items(owner_id, source, source_id, payload, status) values ($1, $2, $3, $4, $5)", [owner, source.source, source.id, JSON.stringify({ kind: source.kind, label: source.label, extractedItems }), extractedItems.length ? "unreviewed" : "processed"]);
-  return true;
+  const inserted = await pool.query("insert into source_items(owner_id, source, source_id, payload, status) values ($1, $2, $3, $4, $5) on conflict (owner_id, source, source_id) where source_id is not null do nothing returning id", [owner, source.source, source.id, JSON.stringify({ kind: source.kind, label: source.label, extractedItems }), extractedItems.length ? "unreviewed" : "processed"]);
+  if (inserted.rows.length) return { inserted: true, sourceItemId: inserted.rows[0].id, extractedItems };
+  const raced = await pool.query("select id, payload from source_items where owner_id = $1 and source = $2 and source_id = $3", [owner, source.source, source.id]);
+  return { inserted: false, sourceItemId: raced.rows[0]?.id || null, extractedItems: raced.rows[0]?.payload?.extractedItems || [] };
 }
 
 function normalizeManualImport(body) {
@@ -331,7 +343,8 @@ function normalizeManualImport(body) {
   try { parsed = JSON.parse(content); } catch { parsed = null; }
   const records = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.value) ? parsed.value : null;
   const normalizedContent = records ? records.map((record, index) => `Record ${index + 1}:\n${typeof record === "string" ? record : JSON.stringify(record, null, 2)}`).join("\n\n") : content;
-  return { kind: source === "teams_chat" ? "teams" : "outlook", source, id: `manual-${Date.now()}-${Math.random().toString(36).slice(2)}`, label: `ChatGPT connector · ${label}`, content: normalizedContent };
+  const fingerprint = createHash("sha256").update(`${source}\n${normalizedContent}`).digest("hex").slice(0, 48);
+  return { kind: source === "teams_chat" ? "teams" : "outlook", source, id: `manual-${fingerprint}`, label: `ChatGPT connector · ${label}`, content: normalizedContent };
 }
 
 async function recordSourceException(owner, source, error) {
@@ -395,7 +408,7 @@ app.post("/api/sync", requireAuth, requireDatabase, async (req, res) => {
   const sources = normalizeSources(responses);
   let newSources = 0;
   for (const source of sources) {
-    try { if (await persistSource(owner, source)) newSources += 1; } catch (error) { await recordSourceException(owner, source.label, error); }
+    try { if ((await persistSource(owner, source)).inserted) newSources += 1; } catch (error) { await recordSourceException(owner, source.label, error); }
   }
   let smartsheetSync = null;
   if (smartsheetToken) {
@@ -414,10 +427,10 @@ app.post("/api/manual-import", requireAppAccess, requireDatabase, async (req, re
     if (!manualConnectorImportEnabled) return res.status(403).json({ error: "Manual connector import is not enabled" });
     if (!openai) return res.status(503).json({ error: "OPENAI_API_KEY is not configured" });
     const source = normalizeManualImport(req.body || {});
-    const extractedItems = await extractItems(source);
-    await pool.query("insert into source_items(owner_id, source, source_id, payload, status) values ($1, $2, $3, $4, $5)", [userId(req), source.source, source.id, JSON.stringify({ kind: source.kind, label: source.label, extractedItems }), extractedItems.length ? "unreviewed" : "processed"]);
+    const persisted = await persistSource(userId(req), source);
+    const extractedItems = persisted.extractedItems;
     const state = await readLiveState(req);
-    res.status(201).json({ source: source.label, extracted: extractedItems.length, state });
+    res.status(persisted.inserted ? 201 : 200).json({ source: source.label, extracted: extractedItems.length, duplicate: !persisted.inserted, state });
   } catch (error) { res.status(502).json({ error: error.message || "Manual connector import failed" }); }
 });
 

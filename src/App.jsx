@@ -33,6 +33,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { backendApi } from "./api";
+import { dateKeyFromDate } from "../shared/domain.mjs";
 
 const navItems = [
   { id: "overview", label: "Overview", icon: House },
@@ -319,26 +320,21 @@ function OverviewMilestoneCard({ milestones, onClick }) { return <button classNa
 
 function getLastSevenScoreDays(completed, scoreEvents = []) {
   const history = scoreEvents.length ? scoreEvents : completed.map((item) => ({ date: item.date, dateKey: item.dateKey, amount: item.points }));
-  const today = new Date();
+  const today = todayKey();
   return Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(today);
-    date.setDate(today.getDate() - 6 + index);
-    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-    const short = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    return { short, dateKey, label: date.toLocaleDateString("en-US", { weekday: "short" }), value: history.filter((item) => item.dateKey === dateKey).reduce((sum, item) => sum + Number(item.amount || item.points || 0), 0) };
+    const dateKey = addDaysToKey(today, -6 + index);
+    const date = new Date(`${dateKey}T12:00:00Z`);
+    const short = date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Los_Angeles" });
+    return { short, dateKey, label: date.toLocaleDateString("en-US", { weekday: "short", timeZone: "America/Los_Angeles" }), value: history.filter((item) => item.dateKey === dateKey).reduce((sum, item) => sum + Number(item.amount || item.points || 0), 0) };
   });
 }
 
 function todayKey() {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return dateKeyFromDate(new Date(), "America/Los_Angeles");
 }
 
 function todayLongLabel() {
-  return new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  return new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "America/Los_Angeles" });
 }
 
 function profileInitials(name) {
