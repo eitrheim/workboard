@@ -367,14 +367,14 @@ function ScoreLineChart({ points }) {
       context.moveTo(0, height - 12);
       context.lineTo(width, height - 12);
       context.stroke();
-      context.strokeStyle = "#144896";
+      context.strokeStyle = "#1E572D";
       context.lineWidth = 3;
       context.lineJoin = "round";
       context.lineCap = "round";
       context.beginPath();
       points.forEach((point, index) => { if (index === 0) context.moveTo(x(index), y(point.value)); else context.lineTo(x(index), y(point.value)); });
       context.stroke();
-      points.forEach((point, index) => { context.fillStyle = "#fff"; context.beginPath(); context.arc(x(index), y(point.value), 4, 0, Math.PI * 2); context.fill(); context.fillStyle = "#144896"; context.beginPath(); context.arc(x(index), y(point.value), 2.5, 0, Math.PI * 2); context.fill(); });
+      points.forEach((point, index) => { context.fillStyle = "#fff"; context.beginPath(); context.arc(x(index), y(point.value), 4, 0, Math.PI * 2); context.fill(); context.fillStyle = "#1E572D"; context.beginPath(); context.arc(x(index), y(point.value), 2.5, 0, Math.PI * 2); context.fill(); });
     };
     draw();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(draw);
