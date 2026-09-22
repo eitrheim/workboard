@@ -103,6 +103,20 @@ passed
 
 ---
 
+## September 22, 2026: Mobile Work register cards
+
+- Source visual truth: `/Users/aeitrheim/Downloads/Screenshot 2026-09-22 at 12.45.11 PM.png`
+- Implementation: mobile-only compact task cards in the Work register. Each card prioritizes task title, urgency, project, due date, owner, effort, and the completion action. Tapping the summary opens the existing full editor; subtasks and blocker actions remain available as compact controls.
+- Desktop preservation: the existing desktop table is retained and is hidden only at the mobile breakpoint.
+- Verification: Sites worker tests passed 4/4 and the production build completed successfully.
+- Visual verification limitation: the local preview could not reach the hosted API, and the browser automation surface did not expose a reliable mobile viewport for populated records. The live desktop register was inspected to confirm the source data shape, but a populated mobile rendering needs a final device check after publishing.
+
+### Final result
+
+blocked
+
+---
+
 ## September 18, 2026: Overview four-card summary
 
 - Source visual truth: `/var/folders/lc/0tlf8lf16yn0y9qbzz_b7mfr0000gp/T/TemporaryItems/NSIRD_screencaptureui_Zbfpr6/Screenshot 2026-09-18 at 1.46.46 PM.png`

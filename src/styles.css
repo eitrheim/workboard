@@ -343,6 +343,7 @@ button, input, select { font: inherit; } button { cursor: pointer; } button:focu
 .add-subtask-row-button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 0; border: 0; color: #087b72; background: transparent; font-size: 11px; font-weight: 600; }
 .add-subtask-row-button:hover { color: #05665e; }
 .subtask-add-row > span { color: #aaa8a0; font-size: 10px; }
+.mobile-register-card { display: none; }
 @media (max-width: 780px) {
   .register-edit-cell { min-width: 0; display: flex; }
   .register-edit-cell[data-label] { width: 100%; }
@@ -352,6 +353,24 @@ button, input, select { font: inherit; } button { cursor: pointer; } button:focu
   .register-row-actions .row-action { margin-top: 0; }
   .row-edit-details { width: 24px; height: 24px; }
   .subtask-add-row { display: grid; gap: 3px; padding-left: 12px; }
+  .register-table .desktop-register-row { display: none; }
+  .register-table .mobile-register-card { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; margin: 0; padding: 14px 2px; border-bottom: 1px solid #e6e5e1; }
+  .mobile-register-card-content { min-width: 0; display: grid; gap: 10px; padding: 0; color: #20201e; background: transparent; text-align: left; }
+  .mobile-task-head { min-width: 0; display: flex; align-items: center; gap: 7px; }
+  .mobile-task-head strong { min-width: 0; overflow: hidden; font-size: 16px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-task-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; color: #706e68; font-size: 12px; line-height: 1.3; }
+  .mobile-task-meta > span { display: inline-flex; align-items: center; gap: 4px; }
+  .mobile-task-meta > span:not(:last-child)::after { content: ""; width: 3px; height: 3px; margin-left: 4px; border-radius: 50%; background: #bbb9b1; }
+  .mobile-task-meta .mobile-due-chip { padding: 3px 6px; border-radius: 5px; color: #4e4c46; background: #f0efeb; font-weight: 600; }
+  .mobile-task-meta .mobile-due-chip::after { display: none; }
+  .mobile-task-meta .mobile-due-chip.due { color: #a42625; background: #fff0ef; }
+  .mobile-task-meta .mobile-due-chip.missing, .mobile-task-meta .mobile-missing-detail { color: #a42625; }
+  .mobile-task-meta .mobile-missing-detail { font-weight: 600; }
+  .mobile-blocker-copy { color: #a26b1d; font-size: 11px; line-height: 1.35; }
+  .mobile-register-actions { display: flex; align-items: center; align-self: start; gap: 7px; }
+  .mobile-register-actions .icon-action-button { width: 38px; min-width: 38px; height: 38px; border-radius: 10px; }
+  .mobile-clear-blocker { min-height: 38px; padding: 0 10px; border: 1px solid #d9d4c8; border-radius: 9px; color: #876025; background: #fffaf1; font-size: 11px; font-weight: 600; }
+  .mobile-register-card.overdue .mobile-task-head strong { color: #a42625; }
 }
 .extraction-screen { gap: 22px; }
 .extraction-intro { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
