@@ -7,15 +7,19 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dist = path.join(root, "dist");
 const index = path.join(dist, "client", "index.html");
 const worker = path.join(root, "worker", "index.js");
+const sharedDomain = path.join(root, "shared", "domain.mjs");
+const workerDomainShim = path.join(root, "worker", "shared", "domain.mjs");
 const hosting = path.join(root, ".openai", "hosting.json");
 
-for (const file of [index, worker, hosting]) {
+for (const file of [index, worker, sharedDomain, workerDomainShim, hosting]) {
   if (!existsSync(file)) throw new Error("Missing Sites build input: " + file);
 }
 
 mkdirSync(path.join(dist, "server"), { recursive: true });
+mkdirSync(path.join(dist, "server", "shared"), { recursive: true });
 mkdirSync(path.join(dist, ".openai"), { recursive: true });
 copyFileSync(worker, path.join(dist, "server", "index.js"));
+copyFileSync(sharedDomain, path.join(dist, "server", "shared", "domain.mjs"));
 copyFileSync(hosting, path.join(dist, ".openai", "hosting.json"));
 
 console.log("Prepared Sites build: dist/server/index.js and dist/.openai/hosting.json");

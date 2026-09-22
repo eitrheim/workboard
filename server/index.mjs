@@ -8,6 +8,7 @@ import OpenAI from "openai";
 import pg from "pg";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { dateKeyFromDate as domainDateKeyFromDate, dateLabel as domainDateLabel, dateOnly as domainDateOnly, effortPoints, isAnnOwner, parseDeadline as domainParseDeadline, parseEffort } from "../shared/domain.mjs";
 
 dotenv.config();
 
@@ -104,66 +105,10 @@ function currentProfile(req) {
   return { name: account.name || account.username || (manualConnectorImportEnabled && isLoopbackRequest(req) ? "Local connector import" : "Microsoft 365 user"), email: account.username || (manualConnectorImportEnabled && isLoopbackRequest(req) ? "ChatGPT-connected data" : "") };
 }
 
-function dateOnly(value) {
-  if (!value) return null;
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : dateKeyFromDate(value);
-  const text = String(value).trim();
-  return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : parseDeadline(text);
-}
-
-function todayKey() {
-  return dateKeyFromDate(new Date());
-}
-
-function dateKeyFromDate(value) {
-  const parts = new Intl.DateTimeFormat("en-US", { timeZone: appTimeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(value);
-  const values = Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
-}
-
-function dateLabel(value) {
-  const key = dateOnly(value);
-  if (!key) return "No deadline";
-  const today = todayKey();
-  if (key === today) return "Today";
-  return new Date(`${key}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function effortPoints(hours) {
-  const effort = Number(hours) || 1;
-  return effort >= 4 ? 40 : effort > 1 ? 20 : 10;
-}
-
-function isAnnOwner(owner) {
-  return String(owner || "").trim().toLowerCase() === "ann";
-}
-
-function parseDeadline(value) {
-  const text = String(value ?? "").trim();
-  if (!text || /^no deadline$/i.test(text)) return null;
-  if (/^today$/i.test(text)) return todayKey();
-  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
-  const normalizedText = text.replace(/\b(\d{1,2})(st|nd|rd|th)\b/gi, "$1");
-
-  const numericDate = normalizedText.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/);
-  if (numericDate) {
-    const [, month, day, rawYear] = numericDate;
-    const year = rawYear.length === 2 ? 2000 + Number(rawYear) : Number(rawYear);
-    const candidate = new Date(Date.UTC(year, Number(month) - 1, Number(day)));
-    if (candidate.getUTCFullYear() === year && candidate.getUTCMonth() === Number(month) - 1 && candidate.getUTCDate() === Number(day)) return candidate.toISOString().slice(0, 10);
-  }
-
-  const hasExplicitYear = /(?:^|\D)(?:19|20)\d{2}(?:\D|$)/.test(normalizedText);
-  const datedText = hasExplicitYear ? normalizedText : `${normalizedText} ${todayKey().slice(0, 4)}`;
-  const parsed = Date.parse(datedText);
-  return Number.isNaN(parsed) ? null : dateKeyFromDate(new Date(parsed));
-}
-
-function parseEffort(value) {
-  const match = String(value ?? "").replace(/,/g, "").match(/(?:\d+(?:\.\d+)?|\.\d+)/);
-  const effort = match ? Number(match[0]) : Number(value);
-  return Number.isFinite(effort) && effort > 0 ? effort : 1;
-}
+const dateOnly = (value) => domainDateOnly(value, { timeZone: appTimeZone });
+const todayKey = () => domainDateKeyFromDate(new Date(), appTimeZone);
+const dateLabel = (value) => domainDateLabel(value, { timeZone: appTimeZone });
+const parseDeadline = (value) => domainParseDeadline(value, { timeZone: appTimeZone });
 
 function serializeTask(row) {
   return { id: row.id, title: row.title, project: row.project, deadline: dateLabel(row.deadline), deadlineKey: dateOnly(row.deadline), owner: row.owner_name, effortHours: Number(row.effort_hours), points: [10, 20, 40].includes(Number(row.points)) ? Number(row.points) : effortPoints(Number(row.effort_hours)), status: row.status, blocker: row.blocker || undefined, notes: row.notes || "", notesAi: Boolean(row.notes_ai), parentTaskId: row.parent_task_id || undefined, sourceKind: row.source_kind || undefined };
@@ -199,7 +144,24 @@ async function smartsheetRequest(path, options = {}) {
 
 function smartsheetCells(row, columns) {
   const values = new Map((row.cells || []).map((cell) => [cell.columnId, cell.displayValue ?? cell.value ?? ""]));
-  return Object.fromEntries(columns.map((column) => [String(column.title).toLowerCase(), values.get(column.id) || ""]));
+  return Object.fromEntries(columns.map((column) => [String(column.title).toLowerCase(), values.get(column.id) ?? ""]));
+}
+
+async function reconcileSmartsheetCompletion(owner, taskId) {
+  const result = await pool.query("select * from tasks where id=$1 and owner_id=$2", [taskId, owner]);
+  if (!result.rows.length) return;
+  const task = result.rows[0];
+  const points = isAnnOwner(task.owner_name) ? effortPoints(task.effort_hours) : 0;
+  await pool.query(`insert into completed_tasks(owner_id, task_id, title, project, effort_hours, points)
+    select $1, t.id, t.title, t.project, t.effort_hours, $2
+    from tasks t
+    where t.id=$3 and t.owner_id=$1
+      and not exists (select 1 from completed_tasks c where c.owner_id=$1 and c.task_id=t.id)`, [owner, points, taskId]);
+  if (points > 0) {
+    await pool.query(`insert into score_events(owner_id, amount, cause, task_id)
+      select $1, $2, 'completed task', $3
+      where not exists (select 1 from score_events where owner_id=$1 and task_id=$3 and cause='completed task')`, [owner, points, taskId]);
+  }
 }
 
 async function syncSmartsheetTasks(owner) {
@@ -207,13 +169,15 @@ async function syncSmartsheetTasks(owner) {
   const sheet = await smartsheetRequest(`/sheets/${encodeURIComponent(smartsheetSheetId)}`);
   const columns = sheet.columns || [];
   const column = (title) => columns.find((item) => String(item.title).toLowerCase() === title.toLowerCase());
-  const taskColumn = column("task"); const projectColumn = column("Category"); const deadlineColumn = column("Due date"); const ownerColumn = column("owner"); const effortColumn = column("LOE") || column("LOE (in hours)"); const statusColumn = column("status");
+  const taskColumn = column("task"); const statusColumn = column("status");
   if (!taskColumn) throw new Error("Smartsheet sheet is missing the task column");
   for (const row of sheet.rows || []) {
     const values = smartsheetCells(row, columns); const title = String(values.task || "").trim(); if (!title) continue;
     const sheetStatus = String(values.status || "To do").trim(); const normalizedStatus = /^(done|complete|completed)$/i.test(sheetStatus) ? "completed" : "active";
     const result = await pool.query("insert into tasks(owner_id,title,project,deadline,owner_name,effort_hours,status,source_kind,source_id) values($1,$2,$3,$4,$5,$6,$7,'smartsheet',$8) on conflict (owner_id, source_kind, source_id) where source_kind is not null and source_id is not null do update set title=excluded.title, project=excluded.project, deadline=excluded.deadline, owner_name=excluded.owner_name, effort_hours=excluded.effort_hours, status=case when tasks.status='completed' then tasks.status else excluded.status end, updated_at=now() returning id", [owner, title, String(values.category || "Unassigned") || "Unassigned", parseDeadline(values["due date"]), String(values.owner || "Unassigned") || "Unassigned", parseEffort(values["loe (in hours)"] ?? values.loe), normalizedStatus, String(row.id)]);
-    await pool.query("insert into score_events(owner_id, amount, cause, task_id) select $1, $2, $3, $4 where not exists (select 1 from score_events where owner_id=$1 and task_id=$4 and cause=$3)", [owner, 1, "task added", result.rows[0].id]);
+    const taskId = result.rows[0].id;
+    await pool.query("insert into score_events(owner_id, amount, cause, task_id) select $1, $2, $3, $4 where not exists (select 1 from score_events where owner_id=$1 and task_id=$4 and cause=$3)", [owner, 1, "task added", taskId]);
+    if (normalizedStatus === "completed") await reconcileSmartsheetCompletion(owner, taskId);
   }
   return { rows: sheet.rows?.length || 0, statusColumn: Boolean(statusColumn) };
 }
@@ -330,7 +294,6 @@ function queueFromSourceRow(row) {
 
 async function readLiveState(req) {
   const owner = userId(req);
-  if (smartsheetToken) { try { await syncSmartsheetTasks(owner); } catch (error) { console.error("Smartsheet sync failed", error.message); } }
   const [tasks, completed, scoreEvents, sourceItems, exceptions, projects, milestones] = await Promise.all([
     pool.query("select * from tasks where owner_id = $1 and status in ('active', 'blocked') order by deadline nulls last, created_at desc", [owner]),
     pool.query("select c.*, t.deadline, t.owner_name from completed_tasks c left join tasks t on t.id = c.task_id where c.owner_id = $1 order by c.completed_at desc", [owner]),
@@ -434,8 +397,12 @@ app.post("/api/sync", requireAuth, requireDatabase, async (req, res) => {
   for (const source of sources) {
     try { if (await persistSource(owner, source)) newSources += 1; } catch (error) { await recordSourceException(owner, source.label, error); }
   }
+  let smartsheetSync = null;
+  if (smartsheetToken) {
+    try { smartsheetSync = await syncSmartsheetTasks(owner); } catch (error) { await recordSourceException(owner, "Smartsheet", error); }
+  }
   const state = await readLiveState(req);
-  res.json({ syncedAt: new Date().toISOString(), sources: { mail: responses.mail.value?.length || 0, calendar: responses.calendar.value?.length || 0, teams: responses.teams.value?.length || 0 }, calendarEvents: responses.calendar.value || [], newSources, writeBack: false, state });
+  res.json({ syncedAt: new Date().toISOString(), sources: { mail: responses.mail.value?.length || 0, calendar: responses.calendar.value?.length || 0, teams: responses.teams.value?.length || 0 }, smartsheet: smartsheetSync, calendarEvents: responses.calendar.value || [], newSources, writeBack: false, state });
 });
 
 app.get("/api/state", requireAppAccess, requireDatabase, async (req, res) => {
