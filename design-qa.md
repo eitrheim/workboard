@@ -117,6 +117,19 @@ blocked
 
 ---
 
+## September 22, 2026: Mobile Work register card refinement
+
+- Source visual truth: `/var/folders/lc/0tlf8lf16yn0y9qbzz_b7mfr0000gp/T/TemporaryItems/NSIRD_screencaptureui_c1A1GY/Screenshot 2026-09-22 at 1.53.51 PM.png`
+- Implementation: task summaries now use a 15 px rounded corner, a muted teal border, a subtle matching surface, and 16 px internal padding. The task-summary button itself has no native browser border.
+- Browser verification: inspected the deployed Work register at 390 × 844 CSS pixels with populated task data. Cards visibly render with rounded, pale teal outlines, comfortable inner spacing, and separated action controls.
+- Remaining differences: none at P0, P1, or P2 severity.
+
+### Final result
+
+passed
+
+---
+
 ## September 18, 2026: Overview four-card summary
 
 - Source visual truth: `/var/folders/lc/0tlf8lf16yn0y9qbzz_b7mfr0000gp/T/TemporaryItems/NSIRD_screencaptureui_Zbfpr6/Screenshot 2026-09-18 at 1.46.46 PM.png`
