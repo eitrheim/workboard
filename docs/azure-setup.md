@@ -1,60 +1,78 @@
-# Azure and Microsoft 365 setup
+# Local backend and Smartsheet setup
 
-This app uses delegated, read-only Microsoft Graph access on behalf of the signed-in West Monroe user. It does not send mail, edit calendar events, write Teams messages, or modify OneDrive or SharePoint content.
+This guide replaces the earlier Microsoft Entra setup. The current Workboard app is local-only; it does not use Microsoft Graph, Entra sign-in, Outlook, Teams, or connector import routes.
 
-## App registration
+## Prerequisites
 
-1. Register a web application in Microsoft Entra ID in the West Monroe tenant.
-2. Add `http://localhost:8787/auth/callback` as a local web redirect URI.
-3. Add delegated Microsoft Graph permissions for the sources enabled in v1:
-   - `User.Read`
-   - `Mail.Read`
-   - `Calendars.Read`
-   - `Chat.Read`
-   - `offline_access`
-4. Use the client ID, tenant ID, and secret in a local `.env` file. Never commit `.env` or place secrets in the frontend.
+- Node.js 22 or newer
+- A local PostgreSQL database
+- An OpenAI API key for document and pasted-text extraction
+- Optional: a Smartsheet API access token if Smartsheet is the task source of truth
 
-Microsoft Graph uses delegated permissions for requests made on behalf of a signed-in user. Keep the permission set limited to the data the workflow actually needs. See the [Microsoft Graph authentication concepts](https://learn.microsoft.com/en-us/graph/auth/auth-concepts) and [Microsoft Graph scopes guidance](https://learn.microsoft.com/en-us/entra/identity-platform/scopes-oidc).
+## Configure the backend
 
-## Local run
+From the project directory:
 
 ```bash
 cp .env.example .env
+```
+
+The `cp` command makes a private working copy of the example configuration. Edit `.env` and set:
+
+```dotenv
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/workboard
+DATABASE_SSL=false
+OPENAI_API_KEY=your-openai-api-key
+SMARTSHEET_ACCESS_TOKEN=your-smartsheet-token
+SMARTSHEET_SHEET_ID=your-sheet-id
+SMARTSHEET_APPROVED_STATUS=To do
+```
+
+`LOCAL_OWNER_ID` is optional. Leave its default value in place when using an existing local database so previously stored rows remain visible.
+
+## Start the app
+
+In one terminal:
+
+```bash
 npm run server
 ```
 
-Create the local PostgreSQL database and apply the schema before starting the backend:
+In another terminal:
 
 ```bash
-createdb workboard
-psql workboard < database/schema.sql
+npm run dev
 ```
 
-Set these values in `.env`:
+The frontend runs at `http://localhost:4173` and the backend runs at `http://localhost:8787`.
 
-```dotenv
-DATABASE_URL=postgresql://<local-user>@localhost:5432/workboard
-DATABASE_SSL=false
-VITE_API_BASE_URL=http://localhost:8787
-FRONTEND_ORIGIN=http://localhost:4173
-AZURE_TENANT_ID=<west-monroe-tenant-id>
-AZURE_CLIENT_ID=<entra-application-client-id>
-AZURE_CLIENT_SECRET=<entra-client-secret>
-OPENAI_API_KEY=<server-side-openai-key>
-OPENAI_MODEL=gpt-5.4-mini
+The backend applies `database/schema.sql` when it starts. The PostgreSQL role in `DATABASE_URL` must have permission to create or alter the application tables.
+
+## Verify configuration
+
+Open the backend health endpoint:
+
+```bash
+curl http://localhost:8787/api/health
 ```
 
-The frontend does not use demo data. It remains at the setup gate until PostgreSQL, Microsoft Entra, and OpenAI are configured. After sign-in, use `Sync` to scan the configured Outlook and Teams sources. Each extracted item is stored locally and enters the Review queue; no source item is modified.
+The response reports whether PostgreSQL, OpenAI, and Smartsheet are configured. A missing Smartsheet token only disables Refresh and Smartsheet write-back; local tasks and extraction still work.
 
-## Temporary connector import mode
+## Smartsheet behavior
 
-If Entra approval is still pending, set `LOCAL_CONNECTOR_IMPORT=true` in `.env` and restart the backend. The app will allow the local single-user workflow without Microsoft sign-in. Use `Import connectors` to paste read-only Outlook or Teams results copied from ChatGPT. Workboard will run the server-side OpenAI extraction and place the proposals in the Review queue. This mode is loopback-only, is not automatic synchronization, and should be disabled after Entra is configured.
+The configured sheet is read when you press Refresh in the Work register. The current mapping is:
 
-## Production path
+| Workboard field | Smartsheet column         |
+| --------------- | ------------------------- |
+| Task name       | `task`                    |
+| Project         | `Category`                |
+| Deadline        | `Due date`                |
+| Owner           | `owner`                   |
+| Effort          | `LOE` or `LOE (in hours)` |
+| Status          | `status`                  |
 
-- Host the Node backend on Azure App Service.
-- Use Azure Database for PostgreSQL Flexible Server with the SQL in `database/schema.sql`.
-- Store secrets in Azure Key Vault or App Service configuration.
-- Replace the local in-memory Express session store with a persistent, encrypted session store before production use.
-- Add a public HTTPS callback URI and webhook endpoint before enabling Microsoft Graph change notifications.
-- Keep the current read-only behavior until West Monroe business, privacy, and compliance requirements are documented.
+Approving a task, creating a task, editing a sourced task, marking it done, and marking it undone write the corresponding row or status back when the task has a Smartsheet source row.
+
+## Production note
+
+The included Express server is intended for local development. For a hosted deployment, use the included Sites Worker deployment path and configure its managed secrets separately. Do not expose `.env`, API keys, or PostgreSQL credentials to the browser.

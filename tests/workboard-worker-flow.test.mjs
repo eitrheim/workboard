@@ -20,9 +20,15 @@ function createDatabase() {
         bind(...values) {
           const statement = database.prepare(sql);
           return {
-            async all() { return { results: statement.all(...values) }; },
-            async first() { return statement.get(...values) ?? null; },
-            async run() { return statement.run(...values); },
+            async all() {
+              return { results: statement.all(...values) };
+            },
+            async first() {
+              return statement.get(...values) ?? null;
+            },
+            async run() {
+              return statement.run(...values);
+            },
           };
         },
       };
@@ -35,7 +41,11 @@ function createDatabase() {
 }
 
 function jsonRequest(path, method, body) {
-  return new Request(`https://workboard.test${path}`, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  return new Request(`https://workboard.test${path}`, {
+    method,
+    headers: { "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
 }
 
 async function readJson(response) {
@@ -45,7 +55,10 @@ async function readJson(response) {
 test("task create, completion, undo, and task-added score events stay consistent", async () => {
   const DB = createDatabase();
   const env = { DB };
-  const createdResponse = await worker.fetch(jsonRequest("/api/tasks", "POST", { title: "Write test plan", project: "Pulse", owner: "Ann", effortHours: ".5" }), env);
+  const createdResponse = await worker.fetch(
+    jsonRequest("/api/tasks", "POST", { title: "Write test plan", project: "Pulse", owner: "Ann", effortHours: ".5" }),
+    env,
+  );
   assert.equal(createdResponse.status, 201);
   const created = await readJson(createdResponse);
   assert.equal(created.task.effortHours, 0.5);
@@ -82,17 +95,31 @@ test("Smartsheet sync is explicit and backfills completed history once", async (
   let sheetReads = 0;
   globalThis.fetch = async () => {
     sheetReads += 1;
-    return new Response(JSON.stringify({
-      columns: [
-        { id: 1, title: "task" },
-        { id: 2, title: "Category" },
-        { id: 3, title: "Due date" },
-        { id: 4, title: "owner" },
-        { id: 5, title: "LOE" },
-        { id: 6, title: "status" },
-      ],
-      rows: [{ id: 42, cells: [{ columnId: 1, value: "Imported completed task" }, { columnId: 2, value: "Pulse" }, { columnId: 4, value: "Ann" }, { columnId: 5, value: 2 }, { columnId: 6, value: "Done" }] }],
-    }), { status: 200, headers: { "content-type": "application/json" } });
+    return new Response(
+      JSON.stringify({
+        columns: [
+          { id: 1, title: "task" },
+          { id: 2, title: "Category" },
+          { id: 3, title: "Due date" },
+          { id: 4, title: "owner" },
+          { id: 5, title: "LOE" },
+          { id: 6, title: "status" },
+        ],
+        rows: [
+          {
+            id: 42,
+            cells: [
+              { columnId: 1, value: "Imported completed task" },
+              { columnId: 2, value: "Pulse" },
+              { columnId: 4, value: "Ann" },
+              { columnId: 5, value: 2 },
+              { columnId: 6, value: "Done" },
+            ],
+          },
+        ],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
   };
   try {
     await worker.fetch(new Request("https://workboard.test/api/state"), env);

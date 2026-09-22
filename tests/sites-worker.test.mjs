@@ -44,7 +44,14 @@ test("falls back to index.html for an unknown app route", async () => {
 test("keeps API requests out of the app shell and returns JSON errors", async () => {
   const response = await worker.fetch(
     new Request("https://example.test/api/missing", { headers: { accept: "application/json" } }),
-    { ASSETS: { fetch: async () => new Response("missing", { status: 404 }) }, DB: { prepare: () => ({ bind: () => ({ all: async () => ({ results: [] }), first: async () => null, run: async () => ({}) }) }) } },
+    {
+      ASSETS: { fetch: async () => new Response("missing", { status: 404 }) },
+      DB: {
+        prepare: () => ({
+          bind: () => ({ all: async () => ({ results: [] }), first: async () => null, run: async () => ({}) }),
+        }),
+      },
+    },
   );
   assert.equal(response.status, 404);
   assert.match(response.headers.get("content-type"), /application\/json/);
