@@ -10,10 +10,20 @@ const worker = path.join(root, "worker", "index.js");
 const sharedDomain = path.join(root, "shared", "domain.mjs");
 const sharedWorkboard = path.join(root, "shared", "workboard.mjs");
 const sharedSmartsheet = path.join(root, "shared", "smartsheet.mjs");
+const sharedErrors = path.join(root, "shared", "errors.mjs");
 const workerDomainShim = path.join(root, "worker", "shared", "domain.mjs");
 const hosting = path.join(root, ".openai", "hosting.json");
 
-for (const file of [index, worker, sharedDomain, sharedWorkboard, sharedSmartsheet, workerDomainShim, hosting]) {
+for (const file of [
+  index,
+  worker,
+  sharedDomain,
+  sharedWorkboard,
+  sharedSmartsheet,
+  sharedErrors,
+  workerDomainShim,
+  hosting,
+]) {
   if (!existsSync(file)) throw new Error("Missing Sites build input: " + file);
 }
 
@@ -24,6 +34,7 @@ copyFileSync(worker, path.join(dist, "server", "index.js"));
 copyFileSync(sharedDomain, path.join(dist, "server", "shared", "domain.mjs"));
 copyFileSync(sharedWorkboard, path.join(dist, "server", "shared", "workboard.mjs"));
 copyFileSync(sharedSmartsheet, path.join(dist, "server", "shared", "smartsheet.mjs"));
+copyFileSync(sharedErrors, path.join(dist, "server", "shared", "errors.mjs"));
 copyFileSync(hosting, path.join(dist, ".openai", "hosting.json"));
 
 console.log("Prepared Sites build: dist/server/index.js and dist/.openai/hosting.json");

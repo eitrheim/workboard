@@ -8,6 +8,7 @@ import {
   validateTaskInput,
 } from "../shared/workboard.mjs";
 import { buildSmartsheetTaskCells, mapSmartsheetColumns } from "../shared/smartsheet.mjs";
+import { externalServiceError, statusForError } from "../shared/errors.mjs";
 
 test("shared domain rules preserve dates, decimals, and score thresholds", () => {
   const now = new Date("2026-09-22T18:00:00Z");
@@ -54,4 +55,11 @@ test("shared workflow rules stay consistent across runtimes", () => {
       { columnId: 5, value: "To do" },
     ],
   );
+});
+
+test("API error classification distinguishes conflicts, dependencies, and server failures", () => {
+  assert.equal(statusForError({ code: "23505", message: "duplicate key" }), 409);
+  assert.equal(statusForError(externalServiceError("Smartsheet request failed (503)", 503)), 503);
+  assert.equal(statusForError(new Error("database connection failed")), 500);
+  assert.equal(statusForError(new Error("Smartsheet is not configured for this Site")), 503);
 });

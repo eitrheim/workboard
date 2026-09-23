@@ -20,6 +20,7 @@ import {
   smartsheetRowValues,
   smartsheetRowId,
 } from "./shared/smartsheet.mjs";
+import { errorMessage, externalServiceError, statusForError } from "./shared/errors.mjs";
 
 const OWNER = "site-owner";
 const json = (value, init = {}) =>
@@ -147,7 +148,7 @@ function profile() {
 }
 
 async function smartsheet(env, path, options = {}) {
-  if (!env.SMARTSHEET_ACCESS_TOKEN) throw new Error("Smartsheet is not configured for this Site");
+  if (!env.SMARTSHEET_ACCESS_TOKEN) throw externalServiceError("Smartsheet is not configured for this Site", 503);
   const response = await fetch(`https://api.smartsheet.com/2.0${path}`, {
     ...options,
     headers: {
@@ -158,7 +159,10 @@ async function smartsheet(env, path, options = {}) {
   });
   if (!response.ok) {
     const detail = await response.json().catch(() => null);
-    throw new Error(`Smartsheet request failed (${response.status})${detail?.message ? `: ${detail.message}` : ""}`);
+    throw externalServiceError(
+      `Smartsheet request failed (${response.status})${detail?.message ? `: ${detail.message}` : ""}`,
+      response.status === 429 ? 503 : 502,
+    );
   }
   return response.status === 204 ? null : response.json();
 }
@@ -391,7 +395,7 @@ const extractionSchema = {
   required: ["items"],
 };
 async function extract(env, source) {
-  if (!env.OPENAI_API_KEY) throw new Error("OpenAI extraction is not configured for this Site");
+  if (!env.OPENAI_API_KEY) throw externalServiceError("OPENAI_API_KEY is not configured", 503);
   const projects = Array.isArray(source.projectOptions)
     ? source.projectOptions
         .map((project) => String(project).trim())
@@ -428,7 +432,10 @@ async function extract(env, source) {
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error?.error?.message || "OpenAI extraction failed");
+    throw externalServiceError(
+      error?.error?.message || "OpenAI extraction failed",
+      response.status === 429 ? 503 : 502,
+    );
   }
   const data = await response.json();
   const outputText =
@@ -565,6 +572,8 @@ async function api(request, env) {
   const projectRoute = route(pathname, /^\/api\/projects\/(.+)$/);
   if (request.method === "PATCH" && projectRoute) {
     const data = await body(request);
+    if (data.status !== "active" && data.status !== "finished")
+      return json({ error: "Project status must be active or finished" }, { status: 400 });
     const status = data.status === "finished" ? "finished" : "active";
     const timestamp = now();
     await run(
@@ -1072,7 +1081,7 @@ export default {
       try {
         return await api(request, env);
       } catch (error) {
-        return json({ error: error.message || "Request failed" }, { status: 502 });
+        return json({ error: errorMessage(error, "Request failed") }, { status: statusForError(error) });
       }
     }
     const response = await env.ASSETS.fetch(request);

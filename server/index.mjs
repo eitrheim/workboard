@@ -27,6 +27,7 @@ import {
   smartsheetRowId,
   smartsheetRowValues,
 } from "../shared/smartsheet.mjs";
+import { errorMessage, externalServiceError, statusForError } from "../shared/errors.mjs";
 
 dotenv.config();
 
@@ -164,10 +165,11 @@ async function smartsheetRequest(path, options = {}) {
         ...(options.headers || {}),
       },
     });
-    if (!response.ok) throw new Error(`Smartsheet request failed (${response.status})`);
+    if (!response.ok)
+      throw externalServiceError(`Smartsheet request failed (${response.status})`, response.status === 429 ? 503 : 502);
     return response.status === 204 ? null : response.json();
   } catch (error) {
-    if (error?.name === "AbortError") throw new Error("Smartsheet request timed out");
+    if (error?.name === "AbortError") throw externalServiceError("Smartsheet request timed out", 503, error);
     throw error;
   } finally {
     clearTimeout(timeout);
@@ -477,7 +479,7 @@ app.post("/api/sync", requireAppAccess, requireDatabase, async (req, res) => {
     const state = await readLiveState(req);
     res.json({ syncedAt: new Date().toISOString(), smartsheet, state });
   } catch (error) {
-    res.status(502).json({ error: error.message || "Smartsheet refresh failed" });
+    res.status(statusForError(error, 500)).json({ error: errorMessage(error, "Smartsheet refresh failed") });
   }
 });
 
@@ -485,7 +487,7 @@ app.get("/api/state", requireAppAccess, requireDatabase, async (req, res) => {
   try {
     res.json(await readLiveState(req));
   } catch (error) {
-    res.status(502).json({ error: error.message });
+    res.status(statusForError(error)).json({ error: errorMessage(error) });
   }
 });
 
@@ -533,7 +535,7 @@ app.post("/api/file-extract", requireAppAccess, requireDatabase, async (req, res
       })),
     });
   } catch (error) {
-    res.status(502).json({ error: error.message || "File extraction failed" });
+    res.status(statusForError(error, 502)).json({ error: errorMessage(error, "File extraction failed") });
   }
 });
 
@@ -552,7 +554,7 @@ app.post("/api/milestones", requireAppAccess, requireDatabase, async (req, res) 
     );
     res.status(201).json(serializeMilestone(result.rows[0], tasks.rows));
   } catch (error) {
-    res.status(502).json({ error: error.message });
+    res.status(statusForError(error)).json({ error: errorMessage(error) });
   }
 });
 
@@ -579,7 +581,7 @@ app.patch("/api/milestones/:id", requireAppAccess, requireDatabase, async (req, 
     );
     res.json(serializeMilestone(result.rows[0], tasks.rows));
   } catch (error) {
-    res.status(502).json({ error: error.message });
+    res.status(statusForError(error)).json({ error: errorMessage(error) });
   }
 });
 
@@ -593,7 +595,7 @@ app.post("/api/projects", requireAppAccess, requireDatabase, async (req, res) =>
     );
     res.status(201).json(serializeProject(result.rows[0]));
   } catch (error) {
-    res.status(502).json({ error: error.message });
+    res.status(statusForError(error)).json({ error: errorMessage(error) });
   }
 });
 
@@ -609,7 +611,7 @@ app.patch("/api/projects/:name", requireAppAccess, requireDatabase, async (req, 
     );
     res.json(serializeProject(result.rows[0]));
   } catch (error) {
-    res.status(502).json({ error: error.message });
+    res.status(statusForError(error)).json({ error: errorMessage(error) });
   }
 });
 
@@ -664,7 +666,7 @@ app.post("/api/tasks", requireAppAccess, requireDatabase, async (req, res) => {
       syncWarning,
     });
   } catch (error) {
-    res.status(502).json({ error: error.message });
+    res.status(statusForError(error)).json({ error: errorMessage(error) });
   }
 });
 
@@ -703,6 +705,7 @@ app.patch("/api/tasks/:id", requireAppAccess, requireDatabase, async (req, res) 
         userId(req),
       ],
     );
+    if (!result.rows.length) return res.status(409).json({ error: "Task changed before this update could be applied" });
     let syncWarning = null;
     if (current.source_kind === "smartsheet") {
       try {
@@ -718,7 +721,7 @@ app.patch("/api/tasks/:id", requireAppAccess, requireDatabase, async (req, res) 
     }
     res.json({ ...serializeTask(result.rows[0]), syncWarning });
   } catch (error) {
-    res.status(502).json({ error: error.message });
+    res.status(statusForError(error)).json({ error: errorMessage(error) });
   }
 });
 
@@ -764,7 +767,7 @@ app.post("/api/tasks/:id/complete", requireAppAccess, requireDatabase, async (re
     });
   } catch (error) {
     await client.query("rollback");
-    res.status(502).json({ error: error.message });
+    res.status(statusForError(error)).json({ error: errorMessage(error) });
   } finally {
     client.release();
   }
@@ -804,7 +807,7 @@ app.post("/api/completed/:id/undo", requireAppAccess, requireDatabase, async (re
     res.status(204).end();
   } catch (error) {
     await client.query("rollback");
-    res.status(502).json({ error: error.message });
+    res.status(statusForError(error)).json({ error: errorMessage(error) });
   } finally {
     client.release();
   }
@@ -907,7 +910,7 @@ app.post("/api/source-items/:id/approve", requireAppAccess, requireDatabase, asy
     res.status(201).json({ ...response, syncWarning });
   } catch (error) {
     await client.query("rollback");
-    res.status(502).json({ error: error.message });
+    res.status(statusForError(error)).json({ error: errorMessage(error) });
   } finally {
     client.release();
   }
@@ -934,7 +937,7 @@ app.post("/api/source-items/:id/dismiss", requireAppAccess, requireDatabase, asy
     ]);
     res.status(204).end();
   } catch (error) {
-    res.status(502).json({ error: error.message });
+    res.status(statusForError(error)).json({ error: errorMessage(error) });
   }
 });
 
