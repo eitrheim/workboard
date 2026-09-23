@@ -222,6 +222,44 @@ p {
   display: grid;
   gap: 27px;
 }
+.data-state-panel {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+  padding: 58px 24px;
+  text-align: center;
+  border: 1px solid #dbe8e6;
+  border-radius: 18px;
+  background: #f7fbfa;
+}
+.data-state-panel h2,
+.data-state-panel p {
+  margin: 0;
+}
+.data-state-panel h2 {
+  font-size: 20px;
+}
+.data-state-panel p {
+  color: #706e68;
+}
+.data-state-error {
+  border-color: #edc2c0;
+  background: #fff8f7;
+}
+.loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #cfe3df;
+  border-top-color: #087b72;
+  border-radius: 50%;
+  animation: workboard-spin 0.8s linear infinite;
+}
+@keyframes workboard-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .tab-row {
   gap: 10px;
   overflow-x: auto;

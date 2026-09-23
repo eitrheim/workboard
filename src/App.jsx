@@ -55,6 +55,8 @@ function App() {
   const [notice, setNotice] = useState(null);
   const [celebration, setCelebration] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const applyLiveState = (state) => {
     const liveTasks = state?.tasks || [];
     setQueue(state?.queue || []);
@@ -108,19 +110,36 @@ function App() {
       backendApi
         .state()
         .then((state) => {
-          if (active) applyLiveState(state);
+          if (active) {
+            applyLiveState(state);
+            setLoadError("");
+            setLoading(false);
+          }
         })
         .catch((error) => {
-          if (active) showNotice(error.message || "Could not load your saved Workboard data");
+          if (active) {
+            setLoadError(error.message || "Could not load your saved Workboard data");
+            setLoading(false);
+          }
         });
     loadBackendState();
-    const retry = window.setTimeout(loadBackendState, 1200);
     return () => {
       active = false;
-      window.clearTimeout(retry);
     };
     // Load once on mount; applyLiveState intentionally closes over the current project selection.
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const retryLoad = async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
+      await refreshLiveState();
+    } catch (error) {
+      setLoadError(error.message || "Could not load your saved Workboard data");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const showNotice = (message) => {
     setNotice(message);
@@ -175,23 +194,26 @@ function App() {
   const approveDraft = async (item, values = item) => {
     try {
       const isMilestone = item.itemKind === "MILESTONE";
-      if (item.sourceItemId) await backendApi.approveSourceItem(item.sourceItemId, item.extractedIndex, values);
+      let result;
+      if (item.sourceItemId)
+        result = await backendApi.approveSourceItem(item.sourceItemId, item.extractedIndex, values);
       else if (isMilestone)
-        await backendApi.createMilestone({
+        result = await backendApi.createMilestone({
           name: values.title,
           date: values.deadline,
           project: values.project,
           type: values.milestoneType,
         });
-      else await backendApi.createTask(values);
+      else result = await backendApi.createTask(values);
       await refreshLiveState();
       setModal(null);
       setCelebration({ id: Date.now(), points: isMilestone ? null : 1 });
       window.setTimeout(() => setCelebration(null), 2300);
       showNotice(
-        isMilestone
-          ? "Milestone approved and added to Milestones & deadlines"
-          : "Task approved and added to your work register. +1 point added",
+        result?.syncWarning ||
+          (isMilestone
+            ? "Milestone approved and added to Milestones & deadlines"
+            : "Task approved and added to your work register. +1 point added"),
       );
     } catch (error) {
       showNotice(error.message || "Approval failed");
@@ -212,13 +234,14 @@ function App() {
   const markDone = async (task) => {
     if (task.status === "blocked") return;
     try {
-      await backendApi.completeTask(task.id);
+      const result = await backendApi.completeTask(task.id);
       await refreshLiveState();
       const points = isAnnOwner(task.owner) ? task.points : null;
       setCelebration({ id: Date.now(), points });
       window.setTimeout(() => setCelebration(null), 2300);
       showNotice(
-        points ? `Completed. +${points} points added` : "Completed. No points awarded because Ann is not the owner",
+        result?.syncWarning ||
+          (points ? `Completed. +${points} points added` : "Completed. No points awarded because Ann is not the owner"),
       );
     } catch (error) {
       showNotice(error.message || "Could not complete the task");
@@ -258,7 +281,7 @@ function App() {
       setModal(null);
       setCelebration({ id: Date.now(), points: 1 });
       window.setTimeout(() => setCelebration(null), 2300);
-      showNotice("New task added to your work register. +1 point added");
+      showNotice(result?.syncWarning || "New task added to your work register. +1 point added");
     } catch (error) {
       showNotice(error.message || "Could not create the task");
     }
@@ -313,7 +336,7 @@ function App() {
       const updatedTask = await backendApi.updateTask(taskId, values);
       setTasks((current) => current.map((task) => (task.id === taskId ? updatedTask : task)));
       setModal(null);
-      showNotice("Task details updated");
+      showNotice(updatedTask?.syncWarning || "Task details updated");
     } catch (error) {
       showNotice(error.message || "Could not update the task");
     }
@@ -423,6 +446,22 @@ function App() {
           </button>
         </header>
         <main className="content">
+          {loading && (
+            <section className="data-state-panel" aria-live="polite">
+              <div className="loading-spinner" aria-hidden="true" />
+              <h2>Loading your Workboard</h2>
+              <p>Fetching your saved tasks and milestones.</p>
+            </section>
+          )}
+          {!loading && loadError && (
+            <section className="data-state-panel data-state-error" role="alert">
+              <h2>We couldn’t load your Workboard data</h2>
+              <p>{loadError}</p>
+              <button className="primary-button" onClick={retryLoad} type="button">
+                Try again
+              </button>
+            </section>
+          )}
           {!["milestones", "project"].includes(screen) && (
             <div className={`content-heading ${screen === "register" ? "register-heading" : ""}`}>
               <div>

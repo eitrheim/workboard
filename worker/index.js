@@ -331,6 +331,18 @@ async function updateSheet(env, sourceId, fields) {
     body: JSON.stringify([{ id: /^\d+$/.test(String(sourceId)) ? Number(sourceId) : sourceId, cells: payload }]),
   });
 }
+async function recordSyncException(env, message) {
+  await run(
+    env.DB,
+    "INSERT INTO source_exceptions(id,owner_id,source,message,status,logged_at) VALUES(?,?,?,?,?,?)",
+    id(),
+    OWNER,
+    "smartsheet",
+    message,
+    "open",
+    now(),
+  );
+}
 
 const extractionSchema = {
   type: "object",
@@ -603,13 +615,6 @@ async function api(request, env) {
     const timestamp = now();
     const taskId = id();
     const hours = effort(data.effortHours);
-    const sourceId = await addSheetRow(env, {
-      title,
-      project,
-      deadline: data.deadlineKey || data.deadline,
-      owner: data.owner || "Unassigned",
-      effortHours: hours,
-    });
     await run(
       env.DB,
       "INSERT INTO tasks(id,owner_id,title,project,deadline,owner_name,effort_hours,status,notes,notes_ai,parent_task_id,source_kind,source_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -624,8 +629,8 @@ async function api(request, env) {
       data.notes || "",
       data.notesAi ? 1 : 0,
       data.parentTaskId || null,
-      sourceId ? "smartsheet" : null,
-      sourceId,
+      null,
+      null,
       timestamp,
       timestamp,
     );
@@ -641,13 +646,36 @@ async function api(request, env) {
       taskId,
       timestamp,
     );
-    const taskRow = await one(env.DB, "SELECT * FROM tasks WHERE id=?", taskId);
+    let taskRow = await one(env.DB, "SELECT * FROM tasks WHERE id=?", taskId);
+    let syncWarning = null;
+    try {
+      const sourceId = await addSheetRow(env, {
+        title,
+        project,
+        deadline: data.deadlineKey || data.deadline,
+        owner: data.owner || "Unassigned",
+        effortHours: hours,
+      });
+      if (sourceId) {
+        await run(
+          env.DB,
+          "UPDATE tasks SET source_kind='smartsheet',source_id=?,updated_at=? WHERE id=?",
+          sourceId,
+          now(),
+          taskId,
+        );
+        taskRow = await one(env.DB, "SELECT * FROM tasks WHERE id=?", taskId);
+      }
+    } catch (error) {
+      syncWarning = "Task saved locally, but Smartsheet still needs to be updated";
+      await recordSyncException(env, `Task ${taskId}: ${error.message}`);
+    }
     const eventRow = await one(
       env.DB,
       "SELECT e.*,t.title,t.project FROM score_events e LEFT JOIN tasks t ON t.id=e.task_id WHERE e.id=?",
       eventId,
     );
-    return json({ task: task(taskRow), scoreEvent: score(eventRow) }, { status: 201 });
+    return json({ task: task(taskRow), scoreEvent: score(eventRow), syncWarning }, { status: 201 });
   }
   if (request.method === "POST" && pathname === "/api/recurring-tasks") {
     const data = await body(request);
@@ -698,14 +726,6 @@ async function api(request, env) {
       owner: data.owner || current.owner_name,
       effortHours: data.effortHours === undefined ? current.effort_hours : effort(data.effortHours),
     };
-    if (current.source_kind === "smartsheet")
-      await updateSheet(env, current.source_id, {
-        task: next.title,
-        category: next.project,
-        "due date": next.deadline || "",
-        owner: next.owner,
-        effort: next.effortHours,
-      });
     await run(
       env.DB,
       "UPDATE tasks SET title=?,project=?,deadline=?,owner_name=?,effort_hours=?,notes=?,notes_ai=?,status=?,blocker=?,updated_at=? WHERE id=? AND owner_id=?",
@@ -722,7 +742,22 @@ async function api(request, env) {
       current.id,
       OWNER,
     );
-    return json(task(await one(env.DB, "SELECT * FROM tasks WHERE id=?", current.id)));
+    let syncWarning = null;
+    if (current.source_kind === "smartsheet") {
+      try {
+        await updateSheet(env, current.source_id, {
+          task: next.title,
+          category: next.project,
+          "due date": next.deadline || "",
+          owner: next.owner,
+          effort: next.effortHours,
+        });
+      } catch (error) {
+        syncWarning = "Task updated locally, but Smartsheet still needs to be updated";
+        await recordSyncException(env, `Task ${current.id}: ${error.message}`);
+      }
+    }
+    return json({ ...task(await one(env.DB, "SELECT * FROM tasks WHERE id=?", current.id)), syncWarning });
   }
   if (request.method === "DELETE" && taskRoute) {
     const current = await one(
@@ -754,7 +789,6 @@ async function api(request, env) {
       OWNER,
     );
     if (!current) return json({ error: "Task not found" }, { status: 404 });
-    if (current.source_kind === "smartsheet") await updateSheet(env, current.source_id, { status: "Done" });
     const doneId = id();
     const scorePoints = ann(current.owner_name) ? points(current.effort_hours) : 0;
     const timestamp = now();
@@ -782,6 +816,15 @@ async function api(request, env) {
     const nextOccurrence = template
       ? await createRecurringOccurrence(env, template, addDays(current.deadline || todayKey(), 7))
       : null;
+    let syncWarning = null;
+    if (current.source_kind === "smartsheet") {
+      try {
+        await updateSheet(env, current.source_id, { status: "Done" });
+      } catch (error) {
+        syncWarning = "Task completed locally, but Smartsheet still needs to be updated";
+        await recordSyncException(env, `Task ${current.id}: ${error.message}`);
+      }
+    }
     return json({
       ...completed({
         ...(await one(env.DB, "SELECT * FROM completed_tasks WHERE id=?", doneId)),
@@ -789,6 +832,7 @@ async function api(request, env) {
         owner_name: current.owner_name,
       }),
       nextRecurringTask: nextOccurrence?.task || null,
+      syncWarning,
     });
   }
   const undoRoute = route(pathname, /^\/api\/completed\/([^/]+)\/undo$/);
@@ -800,7 +844,6 @@ async function api(request, env) {
       OWNER,
     );
     if (!row) return json({ error: "Completed task not found" }, { status: 404 });
-    if (row.source_kind === "smartsheet") await updateSheet(env, row.source_id, { status: "To do" });
     await env.DB.batch([
       env.DB.prepare("UPDATE tasks SET status='active',updated_at=? WHERE id=?").bind(now(), row.task_id),
       env.DB.prepare("DELETE FROM score_events WHERE task_id=? AND owner_id=? AND cause='completed task'").bind(
@@ -809,6 +852,13 @@ async function api(request, env) {
       ),
       env.DB.prepare("DELETE FROM completed_tasks WHERE id=?").bind(row.id),
     ]);
+    if (row.source_kind === "smartsheet") {
+      try {
+        await updateSheet(env, row.source_id, { status: "To do" });
+      } catch (error) {
+        await recordSyncException(env, `Task ${row.task_id}: ${error.message}`);
+      }
+    }
     return noContent();
   }
   if (request.method === "POST" && pathname === "/api/milestones") {
@@ -871,6 +921,7 @@ async function api(request, env) {
     const index = Number(data.extractedIndex);
     const item = payload.extractedItems?.[index];
     if (!item) return json({ error: "Extracted item not found" }, { status: 400 });
+    if ((payload.approvedIndexes || []).includes(index)) return json({ alreadyApproved: true });
     const values = data.values || {};
     const itemKind = values.itemKind || item.type;
     let result;
@@ -900,13 +951,6 @@ async function api(request, env) {
       const hours = effort(values.effortHours || item.effortHours);
       const taskId = id();
       const timestamp = now();
-      const sourceId = await addSheetRow(env, {
-        title,
-        project,
-        deadline: values.deadline || item.deadline,
-        owner: ownerName,
-        effortHours: hours,
-      });
       await env.DB.batch([
         env.DB.prepare(
           "INSERT INTO tasks(id,owner_id,title,project,deadline,owner_name,effort_hours,status,notes,notes_ai,source_kind,source_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -921,8 +965,8 @@ async function api(request, env) {
           "active",
           values.notes || item.evidence || "",
           1,
-          sourceId ? "smartsheet" : "file",
-          sourceId || source.source_id,
+          source.source,
+          source.source_id,
           timestamp,
           timestamp,
         ),
@@ -930,7 +974,7 @@ async function api(request, env) {
           "INSERT INTO score_events(id,owner_id,event_date,amount,cause,task_id,created_at) VALUES(?,?,?,?,?,?,?)",
         ).bind(id(), OWNER, todayKey(), 1, "task added", taskId, timestamp),
       ]);
-      result = { kind: "task" };
+      result = { kind: "task", taskId, title, project, deadline: values.deadline || item.deadline, ownerName, hours };
     }
     const approvedIndexes = [...new Set([...(payload.approvedIndexes || []), index])];
     const status =
@@ -945,7 +989,36 @@ async function api(request, env) {
       now(),
       source.id,
     );
-    return json(result, { status: 201 });
+    let syncWarning = null;
+    if (result.kind === "task") {
+      try {
+        const sourceId = await addSheetRow(env, {
+          title: result.title,
+          project: result.project,
+          deadline: result.deadline,
+          owner: result.ownerName,
+          effortHours: result.hours,
+        });
+        if (sourceId)
+          await run(
+            env.DB,
+            "UPDATE tasks SET source_kind='smartsheet',source_id=?,updated_at=? WHERE id=?",
+            sourceId,
+            now(),
+            result.taskId,
+          );
+      } catch (error) {
+        syncWarning = "Task approved locally, but Smartsheet still needs to be updated";
+        await recordSyncException(env, `Approved task ${result.taskId}: ${error.message}`);
+      }
+      delete result.taskId;
+      delete result.title;
+      delete result.project;
+      delete result.deadline;
+      delete result.ownerName;
+      delete result.hours;
+    }
+    return json({ ...result, syncWarning }, { status: 201 });
   }
   const dismissRoute = route(pathname, /^\/api\/source-items\/([^/]+)\/dismiss$/);
   if (request.method === "POST" && dismissRoute) {

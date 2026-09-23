@@ -281,6 +281,17 @@ async function updateSmartsheetTaskFields(task) {
   });
 }
 
+async function recordSyncException(owner, message) {
+  try {
+    await pool.query("insert into source_exceptions(owner_id, source, message) values ($1, 'smartsheet', $2)", [
+      owner,
+      message,
+    ]);
+  } catch (error) {
+    console.error("Could not record Smartsheet sync exception", error);
+  }
+}
+
 const extractionSchema = {
   type: "object",
   additionalProperties: false,
@@ -605,7 +616,6 @@ app.post("/api/tasks", requireAppAccess, requireDatabase, async (req, res) => {
       owner: owner || "Unassigned",
       effortHours: parseEffort(effortHours),
     };
-    const smartsheetRowId = await addApprovedTaskToSmartsheet(normalizedTask);
     const result = await pool.query(
       "insert into tasks(owner_id, title, project, deadline, owner_name, effort_hours, notes, notes_ai, parent_task_id, source_kind, source_id) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *",
       [
@@ -618,21 +628,37 @@ app.post("/api/tasks", requireAppAccess, requireDatabase, async (req, res) => {
         notes || "",
         Boolean(notesAi),
         parentTaskId || null,
-        smartsheetRowId ? "smartsheet" : null,
-        smartsheetRowId ? String(smartsheetRowId) : null,
+        null,
+        null,
       ],
     );
     const scoreEvent = await pool.query(
       "insert into score_events(owner_id, amount, cause, task_id) values ($1, $2, $3, $4) returning *",
       [userId(req), 1, "task added", result.rows[0].id],
     );
+    let taskRow = result.rows[0];
+    let syncWarning = null;
+    try {
+      const smartsheetRowId = await addApprovedTaskToSmartsheet(normalizedTask);
+      if (smartsheetRowId) {
+        const synced = await pool.query(
+          "update tasks set source_kind='smartsheet', source_id=$1, updated_at=now() where id=$2 and owner_id=$3 returning *",
+          [String(smartsheetRowId), taskRow.id, userId(req)],
+        );
+        taskRow = synced.rows[0] || taskRow;
+      }
+    } catch (error) {
+      syncWarning = "Task saved locally, but Smartsheet still needs to be updated";
+      await recordSyncException(userId(req), `Task ${taskRow.id}: ${error.message}`);
+    }
     res.status(201).json({
-      task: serializeTask(result.rows[0]),
+      task: serializeTask(taskRow),
       scoreEvent: serializeScoreEvent({
         ...scoreEvent.rows[0],
-        title: result.rows[0].title,
-        project: result.rows[0].project,
+        title: taskRow.title,
+        project: taskRow.project,
       }),
+      syncWarning,
     });
   } catch (error) {
     res.status(502).json({ error: error.message });
@@ -658,7 +684,6 @@ app.patch("/api/tasks/:id", requireAppAccess, requireDatabase, async (req, res) 
       effort_hours: effortHours === undefined ? current.effort_hours : parseEffort(effortHours),
     };
     const nextStatus = status === "active" || status === "blocked" ? status : undefined;
-    if (current.source_kind === "smartsheet") await updateSmartsheetTaskFields(nextTask);
     const result = await pool.query(
       "update tasks set title=$1, project=$2, deadline=$3, owner_name=$4, effort_hours=$5, notes=$6, notes_ai=$7, status=coalesce($8,status), blocker=case when $9 = '' then null else coalesce($9,blocker) end, updated_at=now() where id=$10 and owner_id=$11 and status in ('active','blocked') returning *",
       [
@@ -667,15 +692,28 @@ app.patch("/api/tasks/:id", requireAppAccess, requireDatabase, async (req, res) 
         nextTask.deadline,
         nextTask.owner_name,
         nextTask.effort_hours,
-        notes || "",
-        Boolean(notesAi),
+        notes === undefined ? current.notes : notes,
+        notesAi === undefined ? current.notes_ai : Boolean(notesAi),
         nextStatus,
         blocker,
         req.params.id,
         userId(req),
       ],
     );
-    res.json(serializeTask(result.rows[0]));
+    let syncWarning = null;
+    if (current.source_kind === "smartsheet") {
+      try {
+        await updateSmartsheetTaskFields({
+          ...nextTask,
+          source_kind: current.source_kind,
+          source_id: current.source_id,
+        });
+      } catch (error) {
+        syncWarning = "Task updated locally, but Smartsheet still needs to be updated";
+        await recordSyncException(userId(req), `Task ${req.params.id}: ${error.message}`);
+      }
+    }
+    res.json({ ...serializeTask(result.rows[0]), syncWarning });
   } catch (error) {
     res.status(502).json({ error: error.message });
   }
@@ -694,7 +732,6 @@ app.post("/api/tasks/:id/complete", requireAppAccess, requireDatabase, async (re
       return res.status(404).json({ error: "Task not found" });
     }
     const task = found.rows[0];
-    if (task.source_kind === "smartsheet") await updateSmartsheetTaskStatus(task.source_id, "Done");
     const points = isAnnOwner(task.owner_name) ? effortPoints(task.effort_hours) : 0;
     const completed = await client.query(
       "insert into completed_tasks(owner_id, task_id, title, project, effort_hours, points) values ($1,$2,$3,$4,$5,$6) returning *",
@@ -709,7 +746,19 @@ app.post("/api/tasks/:id/complete", requireAppAccess, requireDatabase, async (re
         task.id,
       ]);
     await client.query("commit");
-    res.json(serializeCompleted({ ...completed.rows[0], deadline: task.deadline, owner_name: task.owner_name }));
+    let syncWarning = null;
+    if (task.source_kind === "smartsheet") {
+      try {
+        await updateSmartsheetTaskStatus(task.source_id, "Done");
+      } catch (error) {
+        syncWarning = "Task completed locally, but Smartsheet still needs to be updated";
+        await recordSyncException(userId(req), `Task ${task.id}: ${error.message}`);
+      }
+    }
+    res.json({
+      ...serializeCompleted({ ...completed.rows[0], deadline: task.deadline, owner_name: task.owner_name }),
+      syncWarning,
+    });
   } catch (error) {
     await client.query("rollback");
     res.status(502).json({ error: error.message });
@@ -731,7 +780,6 @@ app.post("/api/completed/:id/undo", requireAppAccess, requireDatabase, async (re
       return res.status(404).json({ error: "Completed task not found" });
     }
     const item = found.rows[0];
-    if (item.source_kind === "smartsheet") await updateSmartsheetTaskStatus(item.source_id, "To do");
     if (item.task_id)
       await client.query("update tasks set status='active', updated_at=now() where id=$1 and owner_id=$2", [
         item.task_id,
@@ -743,6 +791,13 @@ app.post("/api/completed/:id/undo", requireAppAccess, requireDatabase, async (re
     ]);
     await client.query("delete from completed_tasks where id=$1", [item.id]);
     await client.query("commit");
+    if (item.source_kind === "smartsheet") {
+      try {
+        await updateSmartsheetTaskStatus(item.source_id, "To do");
+      } catch (error) {
+        await recordSyncException(userId(req), `Task ${item.task_id}: ${error.message}`);
+      }
+    }
     res.status(204).end();
   } catch (error) {
     await client.query("rollback");
@@ -772,6 +827,10 @@ app.post("/api/source-items/:id/approve", requireAppAccess, requireDatabase, asy
       await client.query("rollback");
       return res.status(400).json({ error: "Extracted item not found" });
     }
+    if ((payload.approvedIndexes || []).includes(index)) {
+      await client.query("rollback");
+      return res.json({ alreadyApproved: true });
+    }
     const values = req.body.values || {};
     const title = values.title || item.title;
     const project = values.project || item.project || "Unassigned";
@@ -795,13 +854,6 @@ app.post("/api/source-items/:id/approve", requireAppAccess, requireDatabase, asy
       const ownerName = values.owner || item.owner || "Unassigned";
       const effortHours = Number(values.effortHours || item.effortHours) || 1;
       const notes = values.notes || item.evidence || "";
-      const smartsheetRowId = await addApprovedTaskToSmartsheet({
-        title,
-        project,
-        deadline,
-        owner: ownerName,
-        effortHours,
-      });
       const task = await client.query(
         "insert into tasks(owner_id, title, project, deadline, owner_name, effort_hours, notes, notes_ai, source_kind, source_id) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *",
         [
@@ -813,8 +865,8 @@ app.post("/api/source-items/:id/approve", requireAppAccess, requireDatabase, asy
           effortHours,
           notes,
           Boolean(notes),
-          smartsheetRowId ? "smartsheet" : row.source,
-          smartsheetRowId ? String(smartsheetRowId) : row.source_id,
+          row.source,
+          row.source_id,
         ],
       );
       await client.query("insert into score_events(owner_id, amount, cause, task_id) values ($1, $2, $3, $4)", [
@@ -835,7 +887,28 @@ app.post("/api/source-items/:id/approve", requireAppAccess, requireDatabase, asy
       row.id,
     ]);
     await client.query("commit");
-    res.status(201).json(response);
+    let syncWarning = null;
+    if (response.kind === "task") {
+      try {
+        const smartsheetRowId = await addApprovedTaskToSmartsheet({
+          title,
+          project,
+          deadline,
+          owner: values.owner || item.owner || "Unassigned",
+          effortHours: Number(values.effortHours || item.effortHours) || 1,
+        });
+        if (smartsheetRowId) {
+          await pool.query(
+            "update tasks set source_kind='smartsheet', source_id=$1, updated_at=now() where id=$2 and owner_id=$3",
+            [String(smartsheetRowId), response.task.id, userId(req)],
+          );
+        }
+      } catch (error) {
+        syncWarning = "Task approved locally, but Smartsheet still needs to be updated";
+        await recordSyncException(userId(req), `Approved task ${response.task.id}: ${error.message}`);
+      }
+    }
+    res.status(201).json({ ...response, syncWarning });
   } catch (error) {
     await client.query("rollback");
     res.status(502).json({ error: error.message });

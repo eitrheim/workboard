@@ -52,6 +52,25 @@ async function readJson(response) {
   return response.json();
 }
 
+function seedSourceItem(DB, id, extractedItems) {
+  const timestamp = new Date().toISOString();
+  DB.raw
+    .prepare(
+      "INSERT INTO source_items(id,owner_id,source,source_id,payload,status,file_key,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+    )
+    .run(
+      id,
+      "site-owner",
+      "Pasted text.md",
+      id,
+      JSON.stringify({ extractedItems }),
+      "unreviewed",
+      null,
+      timestamp,
+      timestamp,
+    );
+}
+
 test("task create, completion, undo, and task-added score events stay consistent", async () => {
   const DB = createDatabase();
   const env = { DB };
@@ -139,6 +158,123 @@ test("Smartsheet sync is explicit and backfills completed history once", async (
     assert.equal(secondState.completed.length, 1);
     assert.equal(secondState.scoreEvents.filter((event) => event.cause === "completed task").length, 1);
     assert.equal(sheetReads, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("milestone approval creates a milestone and removes it from the queue", async () => {
+  const DB = createDatabase();
+  seedSourceItem(DB, "source-milestone", [
+    {
+      type: "MILESTONE",
+      title: "Pulse readout",
+      project: "Pulse",
+      owner: "",
+      deadline: "2026-09-25",
+      effortHours: 0,
+      evidence: "Readout date appears in the project plan.",
+    },
+  ]);
+
+  const before = await readJson(await worker.fetch(new Request("https://workboard.test/api/state"), { DB }));
+  assert.equal(before.queue.length, 1);
+  assert.equal(before.queue[0].itemKind, "MILESTONE");
+
+  const response = await worker.fetch(
+    jsonRequest("/api/source-items/source-milestone/approve", "POST", {
+      extractedIndex: 0,
+      values: { itemKind: "MILESTONE", title: "Pulse readout", project: "Pulse", deadline: "2026-09-25" },
+    }),
+    { DB },
+  );
+  assert.equal(response.status, 201);
+
+  const after = await readJson(await worker.fetch(new Request("https://workboard.test/api/state"), { DB }));
+  assert.equal(after.milestones.length, 1);
+  assert.equal(after.milestones[0].name, "Pulse readout");
+  assert.equal(after.milestones[0].dateKey, "2026-09-25");
+  assert.equal(after.queue.length, 0);
+});
+
+test("repeated extracted-task approval is idempotent and does not duplicate queue work", async () => {
+  const DB = createDatabase();
+  seedSourceItem(DB, "source-task", [
+    {
+      type: "TASK",
+      title: "Send the follow-up",
+      project: "Pulse",
+      owner: "Ann",
+      deadline: "2026-09-24",
+      effortHours: 0.5,
+      evidence: "Follow-up requested in the notes.",
+    },
+  ]);
+  const request = () =>
+    worker.fetch(
+      jsonRequest("/api/source-items/source-task/approve", "POST", {
+        extractedIndex: 0,
+        values: { itemKind: "TASK", title: "Send the follow-up", project: "Pulse", owner: "Ann", effortHours: ".5" },
+      }),
+      { DB },
+    );
+
+  const first = await request();
+  assert.equal(first.status, 201);
+  const second = await request();
+  assert.equal(second.status, 200);
+  assert.equal((await readJson(second)).alreadyApproved, true);
+
+  const state = await readJson(await worker.fetch(new Request("https://workboard.test/api/state"), { DB }));
+  assert.equal(state.tasks.length, 1);
+  assert.equal(state.tasks[0].effortHours, 0.5);
+  assert.equal(state.queue.length, 0);
+  assert.equal(state.scoreEvents.filter((event) => event.cause === "task added").length, 1);
+});
+
+test("Smartsheet refresh imports active task fields and preserves decimal effort", async () => {
+  const DB = createDatabase();
+  const env = { DB, SMARTSHEET_ACCESS_TOKEN: "test-token", SMARTSHEET_SHEET_ID: "sheet-1" };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        columns: [
+          { id: 1, title: "task" },
+          { id: 2, title: "Category" },
+          { id: 3, title: "Due date" },
+          { id: 4, title: "owner" },
+          { id: 5, title: "LOE" },
+          { id: 6, title: "status" },
+        ],
+        rows: [
+          {
+            id: 77,
+            cells: [
+              { columnId: 1, value: "Review API keys" },
+              { columnId: 2, value: "WM Internal" },
+              { columnId: 3, value: "2026-09-24" },
+              { columnId: 4, value: "Ann" },
+              { columnId: 5, value: ".5" },
+              { columnId: 6, value: "To do" },
+            ],
+          },
+        ],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  try {
+    const response = await worker.fetch(jsonRequest("/api/sync", "POST"), env);
+    assert.equal(response.status, 200);
+    const state = await readJson(response);
+    assert.equal(state.tasks.length, 1);
+    assert.equal(state.tasks[0].title, "Review API keys");
+    assert.equal(state.tasks[0].project, "WM Internal");
+    assert.equal(state.tasks[0].deadlineKey, "2026-09-24");
+    assert.equal(state.tasks[0].effortHours, 0.5);
+    assert.equal(state.tasks[0].owner, "Ann");
+    assert.equal(state.tasks[0].status, "active");
+    assert.equal(state.scoreEvents.filter((event) => event.cause === "task added").length, 1);
   } finally {
     globalThis.fetch = originalFetch;
   }
