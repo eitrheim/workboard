@@ -6,6 +6,20 @@ import {
   parseEffort as effort,
   todayKey,
 } from "./shared/domain.mjs";
+import {
+  applySourceItemApproval,
+  normalizeMilestoneInput,
+  sourceItemApprovalDecision,
+  taskAddedScoreEvent,
+  validateTaskInput,
+} from "./shared/workboard.mjs";
+import {
+  buildSmartsheetFieldCells,
+  buildSmartsheetTaskCells,
+  findSmartsheetColumn,
+  smartsheetRowValues,
+  smartsheetRowId,
+} from "./shared/smartsheet.mjs";
 
 const OWNER = "site-owner";
 const json = (value, init = {}) =>
@@ -149,11 +163,10 @@ async function smartsheet(env, path, options = {}) {
   return response.status === 204 ? null : response.json();
 }
 function cells(row, columns) {
-  const map = new Map((row.cells || []).map((cell) => [cell.columnId, cell.displayValue ?? cell.value ?? ""]));
-  return Object.fromEntries(columns.map((column) => [String(column.title).toLowerCase(), map.get(column.id) ?? ""]));
+  return smartsheetRowValues(row, columns);
 }
 function column(columns, ...names) {
-  return columns.find((entry) => names.some((name) => String(entry.title).trim().toLowerCase() === name.toLowerCase()));
+  return findSmartsheetColumn(columns, ...names);
 }
 async function sheet(env) {
   return smartsheet(env, `/sheets/${encodeURIComponent(env.SMARTSHEET_SHEET_ID)}`);
@@ -247,17 +260,14 @@ async function addSheetRow(env, item) {
   if (!env.SMARTSHEET_ACCESS_TOKEN) return null;
   const data = await sheet(env);
   const columns = data.columns || [];
-  const fields = [
-    [column(columns, "task"), item.title],
-    [column(columns, "category"), item.project || "Unassigned"],
-    [column(columns, "due date"), dateOnly(item.deadline)],
-    [column(columns, "owner"), item.owner || "Unassigned"],
-    [column(columns, "loe", "loe (in hours)"), effort(item.effortHours)],
-    [column(columns, "status"), env.SMARTSHEET_APPROVED_STATUS || "To do"],
-  ];
-  const payload = fields.flatMap(([field, value]) =>
-    field && value !== null && value !== "" ? [{ columnId: field.id, value }] : [],
-  );
+  const payload = buildSmartsheetTaskCells(columns, {
+    title: item.title,
+    project: item.project,
+    deadline: dateOnly(item.deadline),
+    owner: item.owner,
+    effortHours: effort(item.effortHours),
+    status: env.SMARTSHEET_APPROVED_STATUS || "To do",
+  });
   const result = await smartsheet(env, `/sheets/${encodeURIComponent(env.SMARTSHEET_SHEET_ID)}/rows`, {
     method: "POST",
     body: JSON.stringify([{ toTop: true, cells: payload }]),
@@ -275,6 +285,13 @@ async function createRecurringOccurrence(env, template, deadline) {
     effortHours: template.effort_hours,
   });
   const eventId = id();
+  const addedEvent = taskAddedScoreEvent({
+    ownerId: OWNER,
+    taskId,
+    eventDate: todayKey(),
+    createdAt: timestamp,
+    id: eventId,
+  });
   await env.DB.batch([
     env.DB.prepare(
       "INSERT INTO tasks(id,owner_id,title,project,deadline,owner_name,effort_hours,status,notes,notes_ai,parent_task_id,recurring_task_id,source_kind,source_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -298,7 +315,15 @@ async function createRecurringOccurrence(env, template, deadline) {
     ),
     env.DB.prepare(
       "INSERT INTO score_events(id,owner_id,event_date,amount,cause,task_id,created_at) VALUES(?,?,?,?,?,?,?)",
-    ).bind(eventId, OWNER, todayKey(), 1, "task added", taskId, timestamp),
+    ).bind(
+      addedEvent.id,
+      addedEvent.ownerId,
+      addedEvent.eventDate,
+      addedEvent.amount,
+      addedEvent.cause,
+      addedEvent.taskId,
+      addedEvent.createdAt,
+    ),
     env.DB.prepare("UPDATE recurring_tasks SET last_created_date=?,updated_at=? WHERE id=? AND owner_id=?").bind(
       deadline,
       timestamp,
@@ -321,14 +346,11 @@ async function updateSheet(env, sourceId, fields) {
   if (!env.SMARTSHEET_ACCESS_TOKEN || !sourceId) return;
   const data = await sheet(env);
   const columns = data.columns || [];
-  const payload = Object.entries(fields).flatMap(([name, value]) => {
-    const field = column(columns, ...(name === "effort" ? ["loe", "loe (in hours)"] : [name]));
-    return field ? [{ columnId: field.id, value }] : [];
-  });
+  const payload = buildSmartsheetFieldCells(columns, fields);
   if (!payload.length) return;
   await smartsheet(env, `/sheets/${encodeURIComponent(env.SMARTSHEET_SHEET_ID)}/rows`, {
     method: "PUT",
-    body: JSON.stringify([{ id: /^\d+$/.test(String(sourceId)) ? Number(sourceId) : sourceId, cells: payload }]),
+    body: JSON.stringify([{ id: smartsheetRowId(sourceId), cells: payload }]),
   });
 }
 async function recordSyncException(env, message) {
@@ -609,12 +631,12 @@ async function api(request, env) {
   }
   if (request.method === "POST" && pathname === "/api/tasks") {
     const data = await body(request);
-    const title = String(data.title || "").trim();
-    const project = String(data.project || "").trim();
-    if (!title || !project) return json({ error: "Task title and project are required" }, { status: 400 });
+    const validation = validateTaskInput(data);
+    if (!validation.ok) return json({ error: validation.error }, { status: 400 });
+    const normalizedTask = validation.value;
+    const { title, project, deadline, owner, effortHours: hours, notes, notesAi, parentTaskId } = normalizedTask;
     const timestamp = now();
     const taskId = id();
-    const hours = effort(data.effortHours);
     await run(
       env.DB,
       "INSERT INTO tasks(id,owner_id,title,project,deadline,owner_name,effort_hours,status,notes,notes_ai,parent_task_id,source_kind,source_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -622,29 +644,36 @@ async function api(request, env) {
       OWNER,
       title,
       project,
-      dateOnly(data.deadlineKey || data.deadline),
-      data.owner || "Unassigned",
+      dateOnly(deadline),
+      owner,
       hours,
       "active",
-      data.notes || "",
-      data.notesAi ? 1 : 0,
-      data.parentTaskId || null,
+      notes,
+      notesAi ? 1 : 0,
+      parentTaskId,
       null,
       null,
       timestamp,
       timestamp,
     );
     const eventId = id();
+    const addedEvent = taskAddedScoreEvent({
+      ownerId: OWNER,
+      taskId,
+      eventDate: todayKey(),
+      createdAt: timestamp,
+      id: eventId,
+    });
     await run(
       env.DB,
       "INSERT INTO score_events(id,owner_id,event_date,amount,cause,task_id,created_at) VALUES(?,?,?,?,?,?,?)",
-      eventId,
-      OWNER,
-      todayKey(),
-      1,
-      "task added",
-      taskId,
-      timestamp,
+      addedEvent.id,
+      addedEvent.ownerId,
+      addedEvent.eventDate,
+      addedEvent.amount,
+      addedEvent.cause,
+      addedEvent.taskId,
+      addedEvent.createdAt,
     );
     let taskRow = await one(env.DB, "SELECT * FROM tasks WHERE id=?", taskId);
     let syncWarning = null;
@@ -863,9 +892,9 @@ async function api(request, env) {
   }
   if (request.method === "POST" && pathname === "/api/milestones") {
     const data = await body(request);
-    const name = String(data.name || "").trim();
-    const milestoneDate = dateOnly(data.date || data.deadline);
-    if (!name || !milestoneDate) return json({ error: "A milestone name and date are required" }, { status: 400 });
+    const milestoneInput = normalizeMilestoneInput(data);
+    if (!milestoneInput.name || !milestoneInput.date)
+      return json({ error: "A milestone name and date are required" }, { status: 400 });
     const milestoneId = id();
     const timestamp = now();
     await run(
@@ -873,10 +902,10 @@ async function api(request, env) {
       "INSERT INTO milestones(id,owner_id,name,milestone_date,project,type,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
       milestoneId,
       OWNER,
-      name,
-      milestoneDate,
-      data.project || "Unassigned",
-      data.type === "Deadline" ? "Deadline" : "Milestone",
+      milestoneInput.name,
+      milestoneInput.date,
+      milestoneInput.project,
+      milestoneInput.type,
       timestamp,
       timestamp,
     );
@@ -888,16 +917,16 @@ async function api(request, env) {
   const milestoneRoute = route(pathname, /^\/api\/milestones\/([^/]+)$/);
   if (request.method === "PATCH" && milestoneRoute) {
     const data = await body(request);
-    const name = String(data.name || "").trim();
-    const date = dateOnly(data.date || data.deadline);
-    if (!name || !date) return json({ error: "A milestone name and date are required" }, { status: 400 });
+    const milestoneInput = normalizeMilestoneInput(data);
+    if (!milestoneInput.name || !milestoneInput.date)
+      return json({ error: "A milestone name and date are required" }, { status: 400 });
     await run(
       env.DB,
       "UPDATE milestones SET name=?,milestone_date=?,project=?,type=?,updated_at=? WHERE id=? AND owner_id=?",
-      name,
-      date,
-      data.project || "Unassigned",
-      data.type === "Deadline" ? "Deadline" : "Milestone",
+      milestoneInput.name,
+      milestoneInput.date,
+      milestoneInput.project,
+      milestoneInput.type,
       now(),
       milestoneRoute[0],
       OWNER,
@@ -918,53 +947,50 @@ async function api(request, env) {
     const source = await one(env.DB, "SELECT * FROM source_items WHERE id=? AND owner_id=?", approvalRoute[0], OWNER);
     if (!source) return json({ error: "Source item not found" }, { status: 404 });
     const payload = JSON.parse(source.payload || "{}");
-    const index = Number(data.extractedIndex);
-    const item = payload.extractedItems?.[index];
-    if (!item) return json({ error: "Extracted item not found" }, { status: 400 });
-    if ((payload.approvedIndexes || []).includes(index)) return json({ alreadyApproved: true });
-    const values = data.values || {};
-    const itemKind = values.itemKind || item.type;
+    const decision = sourceItemApprovalDecision(payload, data.extractedIndex, data.values || {});
+    if (!decision.ok) return json({ error: decision.error }, { status: 400 });
+    if (decision.alreadyApproved) return json({ alreadyApproved: true });
     let result;
-    if (itemKind === "MILESTONE") {
-      const name = values.title || item.title;
-      const deadline = values.deadline || item.deadline;
-      const milestoneDate = dateOnly(deadline);
-      if (!name || !milestoneDate) return json({ error: "A milestone name and date are required" }, { status: 400 });
+    if (decision.isMilestone) {
       const milestoneId = id();
       await run(
         env.DB,
         "INSERT INTO milestones(id,owner_id,name,milestone_date,project,type,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
         milestoneId,
         OWNER,
-        name,
-        milestoneDate,
-        values.project || item.project || "Unassigned",
-        values.milestoneType === "Deadline" ? "Deadline" : "Milestone",
+        decision.milestone.name,
+        decision.milestone.date,
+        decision.milestone.project,
+        decision.milestone.type,
         now(),
         now(),
       );
       result = { kind: "milestone" };
     } else {
-      const title = values.title || item.title;
-      const project = values.project || item.project || "Unassigned";
-      const ownerName = values.owner || item.owner || "Unassigned";
-      const hours = effort(values.effortHours || item.effortHours);
+      const { task: approvedTask } = decision;
       const taskId = id();
       const timestamp = now();
+      const addedEvent = taskAddedScoreEvent({
+        ownerId: OWNER,
+        taskId,
+        eventDate: todayKey(),
+        createdAt: timestamp,
+        id: id(),
+      });
       await env.DB.batch([
         env.DB.prepare(
           "INSERT INTO tasks(id,owner_id,title,project,deadline,owner_name,effort_hours,status,notes,notes_ai,source_kind,source_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         ).bind(
           taskId,
           OWNER,
-          title,
-          project,
-          dateOnly(values.deadline || item.deadline),
-          ownerName,
-          hours,
+          approvedTask.title,
+          approvedTask.project,
+          dateOnly(approvedTask.deadline),
+          approvedTask.owner,
+          approvedTask.effortHours,
           "active",
-          values.notes || item.evidence || "",
-          1,
+          approvedTask.notes,
+          approvedTask.notesAi ? 1 : 0,
           source.source,
           source.source_id,
           timestamp,
@@ -972,20 +998,24 @@ async function api(request, env) {
         ),
         env.DB.prepare(
           "INSERT INTO score_events(id,owner_id,event_date,amount,cause,task_id,created_at) VALUES(?,?,?,?,?,?,?)",
-        ).bind(id(), OWNER, todayKey(), 1, "task added", taskId, timestamp),
+        ).bind(
+          addedEvent.id,
+          addedEvent.ownerId,
+          addedEvent.eventDate,
+          addedEvent.amount,
+          addedEvent.cause,
+          addedEvent.taskId,
+          addedEvent.createdAt,
+        ),
       ]);
-      result = { kind: "task", taskId, title, project, deadline: values.deadline || item.deadline, ownerName, hours };
+      result = { kind: "task", taskId, task: approvedTask };
     }
-    const approvedIndexes = [...new Set([...(payload.approvedIndexes || []), index])];
-    const status =
-      approvedIndexes.length + (payload.dismissedIndexes || []).length >= (payload.extractedItems || []).length
-        ? "approved"
-        : "unreviewed";
+    const approved = applySourceItemApproval(payload, decision.index);
     await run(
       env.DB,
       "UPDATE source_items SET payload=?,status=?,updated_at=? WHERE id=?",
-      JSON.stringify({ ...payload, approvedIndexes }),
-      status,
+      JSON.stringify(approved.payload),
+      approved.status,
       now(),
       source.id,
     );
@@ -993,11 +1023,7 @@ async function api(request, env) {
     if (result.kind === "task") {
       try {
         const sourceId = await addSheetRow(env, {
-          title: result.title,
-          project: result.project,
-          deadline: result.deadline,
-          owner: result.ownerName,
-          effortHours: result.hours,
+          ...result.task,
         });
         if (sourceId)
           await run(
@@ -1012,11 +1038,7 @@ async function api(request, env) {
         await recordSyncException(env, `Approved task ${result.taskId}: ${error.message}`);
       }
       delete result.taskId;
-      delete result.title;
-      delete result.project;
-      delete result.deadline;
-      delete result.ownerName;
-      delete result.hours;
+      delete result.task;
     }
     return json({ ...result, syncWarning }, { status: 201 });
   }

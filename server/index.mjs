@@ -13,6 +13,20 @@ import {
   parseDeadline as domainParseDeadline,
   parseEffort,
 } from "../shared/domain.mjs";
+import {
+  applySourceItemApproval,
+  normalizeMilestoneInput,
+  sourceItemApprovalDecision,
+  taskAddedScoreEvent,
+  validateTaskInput,
+} from "../shared/workboard.mjs";
+import {
+  buildSmartsheetFieldCells,
+  buildSmartsheetTaskCells,
+  findSmartsheetColumn,
+  smartsheetRowId,
+  smartsheetRowValues,
+} from "../shared/smartsheet.mjs";
 
 dotenv.config();
 
@@ -161,8 +175,7 @@ async function smartsheetRequest(path, options = {}) {
 }
 
 function smartsheetCells(row, columns) {
-  const values = new Map((row.cells || []).map((cell) => [cell.columnId, cell.displayValue ?? cell.value ?? ""]));
-  return Object.fromEntries(columns.map((column) => [String(column.title).toLowerCase(), values.get(column.id) ?? ""]));
+  return smartsheetRowValues(row, columns);
 }
 
 async function reconcileSmartsheetCompletion(owner, taskId) {
@@ -192,9 +205,8 @@ async function syncSmartsheetTasks(owner) {
   if (!smartsheetToken) return;
   const sheet = await smartsheetRequest(`/sheets/${encodeURIComponent(smartsheetSheetId)}`);
   const columns = sheet.columns || [];
-  const column = (title) => columns.find((item) => String(item.title).toLowerCase() === title.toLowerCase());
-  const taskColumn = column("task");
-  const statusColumn = column("status");
+  const taskColumn = findSmartsheetColumn(columns, "task");
+  const statusColumn = findSmartsheetColumn(columns, "status");
   if (!taskColumn) throw new Error("Smartsheet sheet is missing the task column");
   for (const row of sheet.rows || []) {
     const values = smartsheetCells(row, columns);
@@ -229,17 +241,14 @@ async function addApprovedTaskToSmartsheet(item) {
   if (!smartsheetToken) return null;
   const sheet = await smartsheetRequest(`/sheets/${encodeURIComponent(smartsheetSheetId)}`);
   const columns = sheet.columns || [];
-  const byTitle = (...titles) =>
-    columns.find((column) => titles.some((title) => String(column.title).trim().toLowerCase() === title.toLowerCase()));
-  const fields = [
-    [byTitle("task"), item.title],
-    [byTitle("category"), item.project || "Unassigned"],
-    [byTitle("due date"), item.deadline && item.deadline !== "No deadline" ? parseDeadline(item.deadline) : ""],
-    [byTitle("owner"), item.owner || "Unassigned"],
-    [byTitle("loe", "loe (in hours)"), parseEffort(item.effortHours)],
-    [byTitle("status"), smartsheetApprovedStatus],
-  ];
-  const cells = fields.flatMap(([column, value]) => (column && value !== "" ? [{ columnId: column.id, value }] : []));
+  const cells = buildSmartsheetTaskCells(columns, {
+    title: item.title,
+    project: item.project,
+    deadline: item.deadline && item.deadline !== "No deadline" ? parseDeadline(item.deadline) : "",
+    owner: item.owner,
+    effortHours: parseEffort(item.effortHours),
+    status: smartsheetApprovedStatus,
+  });
   const result = await smartsheetRequest(`/sheets/${encodeURIComponent(smartsheetSheetId)}/rows`, {
     method: "POST",
     body: JSON.stringify([{ toTop: true, cells }]),
@@ -250,9 +259,9 @@ async function addApprovedTaskToSmartsheet(item) {
 async function updateSmartsheetTaskStatus(sourceId, status) {
   if (!smartsheetToken || !sourceId) return;
   const sheet = await smartsheetRequest(`/sheets/${encodeURIComponent(smartsheetSheetId)}`);
-  const statusColumn = (sheet.columns || []).find((column) => String(column.title).trim().toLowerCase() === "status");
+  const statusColumn = findSmartsheetColumn(sheet.columns || [], "status");
   if (!statusColumn) throw new Error("Smartsheet sheet is missing the Status column");
-  const rowId = /^\d+$/.test(String(sourceId)) ? Number(sourceId) : sourceId;
+  const rowId = smartsheetRowId(sourceId);
   await smartsheetRequest(`/sheets/${encodeURIComponent(smartsheetSheetId)}/rows`, {
     method: "PUT",
     body: JSON.stringify([{ id: rowId, cells: [{ columnId: statusColumn.id, value: status }] }]),
@@ -263,18 +272,15 @@ async function updateSmartsheetTaskFields(task) {
   if (!smartsheetToken || task.source_kind !== "smartsheet" || !task.source_id) return;
   const sheet = await smartsheetRequest(`/sheets/${encodeURIComponent(smartsheetSheetId)}`);
   const columns = sheet.columns || [];
-  const byTitle = (...titles) =>
-    columns.find((column) => titles.some((title) => String(column.title).trim().toLowerCase() === title.toLowerCase()));
-  const fields = [
-    [byTitle("task"), task.title],
-    [byTitle("category"), task.project || "Unassigned"],
-    [byTitle("due date"), task.deadline ? dateOnly(task.deadline) : ""],
-    [byTitle("owner"), task.owner_name || "Unassigned"],
-    [byTitle("loe", "loe (in hours)"), parseEffort(task.effort_hours)],
-  ];
-  const cells = fields.flatMap(([column, value]) => (column && value !== "" ? [{ columnId: column.id, value }] : []));
+  const cells = buildSmartsheetFieldCells(columns, {
+    task: task.title,
+    category: task.project || "Unassigned",
+    "due date": task.deadline ? dateOnly(task.deadline) : "",
+    owner: task.owner_name || "Unassigned",
+    effort: parseEffort(task.effort_hours),
+  });
   if (!cells.length) return;
-  const rowId = /^\d+$/.test(String(task.source_id)) ? Number(task.source_id) : task.source_id;
+  const rowId = smartsheetRowId(task.source_id);
   await smartsheetRequest(`/sheets/${encodeURIComponent(smartsheetSheetId)}/rows`, {
     method: "PUT",
     body: JSON.stringify([{ id: rowId, cells }]),
@@ -533,14 +539,12 @@ app.post("/api/file-extract", requireAppAccess, requireDatabase, async (req, res
 
 app.post("/api/milestones", requireAppAccess, requireDatabase, async (req, res) => {
   try {
-    const name = String(req.body.name || "").trim();
-    const project = String(req.body.project || "Unassigned").trim();
-    const date = parseDeadline(req.body.date || req.body.dateKey);
-    const type = req.body.type === "Deadline" ? "Deadline" : "Milestone";
-    if (!name || !date) return res.status(400).json({ error: "Milestone name and date are required" });
+    const milestoneInput = normalizeMilestoneInput(req.body, { timeZone: appTimeZone });
+    if (!milestoneInput.name || !milestoneInput.date)
+      return res.status(400).json({ error: "Milestone name and date are required" });
     const result = await pool.query(
       "insert into milestones(owner_id, name, milestone_date, project, type) values ($1,$2,$3,$4,$5) returning *",
-      [userId(req), name, date, project, type],
+      [userId(req), milestoneInput.name, milestoneInput.date, milestoneInput.project, milestoneInput.type],
     );
     const tasks = await pool.query(
       "select id, project, status from tasks where owner_id=$1 and status in ('active','blocked')",
@@ -554,14 +558,19 @@ app.post("/api/milestones", requireAppAccess, requireDatabase, async (req, res) 
 
 app.patch("/api/milestones/:id", requireAppAccess, requireDatabase, async (req, res) => {
   try {
-    const name = String(req.body.name || "").trim();
-    const project = String(req.body.project || "Unassigned").trim();
-    const date = parseDeadline(req.body.dateKey || req.body.date);
-    const type = req.body.type === "Deadline" ? "Deadline" : "Milestone";
-    if (!name || !date) return res.status(400).json({ error: "Milestone name and date are required" });
+    const milestoneInput = normalizeMilestoneInput(req.body, { timeZone: appTimeZone });
+    if (!milestoneInput.name || !milestoneInput.date)
+      return res.status(400).json({ error: "Milestone name and date are required" });
     const result = await pool.query(
       "update milestones set name=$1, milestone_date=$2, project=$3, type=$4, updated_at=now() where id=$5 and owner_id=$6 returning *",
-      [name, date, project, type, req.params.id, userId(req)],
+      [
+        milestoneInput.name,
+        milestoneInput.date,
+        milestoneInput.project,
+        milestoneInput.type,
+        req.params.id,
+        userId(req),
+      ],
     );
     if (!result.rows.length) return res.status(404).json({ error: "Milestone not found" });
     const tasks = await pool.query(
@@ -606,16 +615,9 @@ app.patch("/api/projects/:name", requireAppAccess, requireDatabase, async (req, 
 
 app.post("/api/tasks", requireAppAccess, requireDatabase, async (req, res) => {
   try {
-    const { title, project, deadline, owner, effortHours, notes, notesAi, parentTaskId } = req.body;
-    if (!title?.trim() || !project?.trim() || !(Number(effortHours) > 0))
-      return res.status(400).json({ error: "Title, project, and positive effort are required" });
-    const normalizedTask = {
-      title: title.trim(),
-      project: project.trim(),
-      deadline,
-      owner: owner || "Unassigned",
-      effortHours: parseEffort(effortHours),
-    };
+    const validation = validateTaskInput(req.body);
+    if (!validation.ok) return res.status(400).json({ error: validation.error });
+    const normalizedTask = validation.value;
     const result = await pool.query(
       "insert into tasks(owner_id, title, project, deadline, owner_name, effort_hours, notes, notes_ai, parent_task_id, source_kind, source_id) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *",
       [
@@ -625,16 +627,17 @@ app.post("/api/tasks", requireAppAccess, requireDatabase, async (req, res) => {
         parseDeadline(deadline),
         normalizedTask.owner,
         normalizedTask.effortHours,
-        notes || "",
-        Boolean(notesAi),
-        parentTaskId || null,
+        normalizedTask.notes,
+        normalizedTask.notesAi,
+        normalizedTask.parentTaskId,
         null,
         null,
       ],
     );
+    const addedEvent = taskAddedScoreEvent({ ownerId: userId(req), taskId: result.rows[0].id });
     const scoreEvent = await pool.query(
       "insert into score_events(owner_id, amount, cause, task_id) values ($1, $2, $3, $4) returning *",
-      [userId(req), 1, "task added", result.rows[0].id],
+      [addedEvent.ownerId, addedEvent.amount, addedEvent.cause, addedEvent.taskId],
     );
     let taskRow = result.rows[0];
     let syncWarning = null;
@@ -821,81 +824,74 @@ app.post("/api/source-items/:id/approve", requireAppAccess, requireDatabase, asy
     }
     const row = found.rows[0];
     const payload = row.payload || {};
-    const index = Number(req.body.extractedIndex);
-    const item = payload.extractedItems?.[index];
-    if (!item) {
+    const decision = sourceItemApprovalDecision(payload, req.body.extractedIndex, req.body.values || {}, {
+      timeZone: appTimeZone,
+    });
+    if (!decision.ok) {
       await client.query("rollback");
-      return res.status(400).json({ error: "Extracted item not found" });
+      return res.status(400).json({ error: decision.error });
     }
-    if ((payload.approvedIndexes || []).includes(index)) {
+    if (decision.alreadyApproved) {
       await client.query("rollback");
       return res.json({ alreadyApproved: true });
     }
-    const values = req.body.values || {};
-    const title = values.title || item.title;
-    const project = values.project || item.project || "Unassigned";
-    const deadline = values.deadline || item.deadline || "No deadline";
-    const isMilestone = item.type === "MILESTONE" || values.itemKind === "MILESTONE";
     let response;
-    if (isMilestone) {
-      const milestoneDate = parseDeadline(deadline);
-      if (!title || !milestoneDate) {
-        await client.query("rollback");
-        return res.status(400).json({ error: "A milestone name and date are required" });
-      }
-      const milestoneType = values.milestoneType === "Deadline" ? "Deadline" : "Milestone";
+    if (decision.isMilestone) {
       const milestone = await client.query(
         "insert into milestones(owner_id, name, milestone_date, project, type) values ($1,$2,$3,$4,$5) returning *",
-        [userId(req), title, milestoneDate, project, milestoneType],
+        [
+          userId(req),
+          decision.milestone.name,
+          decision.milestone.date,
+          decision.milestone.project,
+          decision.milestone.type,
+        ],
       );
       const tasks = await client.query("select * from tasks where owner_id=$1", [userId(req)]);
       response = { kind: "milestone", milestone: serializeMilestone(milestone.rows[0], tasks.rows) };
     } else {
-      const ownerName = values.owner || item.owner || "Unassigned";
-      const effortHours = Number(values.effortHours || item.effortHours) || 1;
-      const notes = values.notes || item.evidence || "";
+      const { task: approvedTask } = decision;
       const task = await client.query(
         "insert into tasks(owner_id, title, project, deadline, owner_name, effort_hours, notes, notes_ai, source_kind, source_id) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *",
         [
           userId(req),
-          title,
-          project,
-          parseDeadline(deadline),
-          ownerName,
-          effortHours,
-          notes,
-          Boolean(notes),
+          approvedTask.title,
+          approvedTask.project,
+          parseDeadline(approvedTask.deadline),
+          approvedTask.owner,
+          approvedTask.effortHours,
+          approvedTask.notes,
+          approvedTask.notesAi,
           row.source,
           row.source_id,
         ],
       );
+      const addedEvent = taskAddedScoreEvent({ ownerId: userId(req), taskId: task.rows[0].id });
       await client.query("insert into score_events(owner_id, amount, cause, task_id) values ($1, $2, $3, $4)", [
-        userId(req),
-        1,
-        "task added",
-        task.rows[0].id,
+        addedEvent.ownerId,
+        addedEvent.amount,
+        addedEvent.cause,
+        addedEvent.taskId,
       ]);
       response = { kind: "task", task: serializeTask(task.rows[0]) };
     }
-    const approved = Array.from(new Set([...(payload.approvedIndexes || []), index]));
-    const extracted = payload.extractedItems || [];
-    const status =
-      approved.length + (payload.dismissedIndexes || []).length >= extracted.length ? "approved" : "unreviewed";
+    const approved = applySourceItemApproval(payload, decision.index);
     await client.query("update source_items set payload=$1, status=$2, updated_at=now() where id=$3", [
-      JSON.stringify({ ...payload, approvedIndexes: approved }),
-      status,
+      JSON.stringify(approved.payload),
+      approved.status,
       row.id,
     ]);
     await client.query("commit");
     let syncWarning = null;
     if (response.kind === "task") {
       try {
+        const approvedTask = decision.task;
         const smartsheetRowId = await addApprovedTaskToSmartsheet({
-          title,
-          project,
-          deadline,
-          owner: values.owner || item.owner || "Unassigned",
-          effortHours: Number(values.effortHours || item.effortHours) || 1,
+          title: approvedTask.title,
+          project: approvedTask.project,
+          deadline: approvedTask.deadline,
+          owner: approvedTask.owner,
+          effortHours: approvedTask.effortHours,
         });
         if (smartsheetRowId) {
           await pool.query(
