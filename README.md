@@ -34,6 +34,15 @@ The backend is a local Express service with PostgreSQL-backed task state, server
 
 No credentials are included. The OpenAI and Smartsheet keys stay on the backend and never reach the browser.
 
+## Project relationship migration
+
+Tasks and milestones retain their existing `project` text as a compatibility snapshot while nullable `project_id` foreign keys are introduced. The migration backfills IDs only when the owner and project name match exactly; unmatched legacy names remain available in the text field for review.
+
+- PostgreSQL: restart the local backend so `database/schema.sql` adds and backfills the columns.
+- D1/Worker: apply [drizzle/0002_project_relationships.sql](drizzle/0002_project_relationships.sql) once through the Site database migration process before switching writes to ID-only project references.
+
+API responses expose `projectId` when a relationship has been backfilled. The text fields remain intentionally preserved until all legacy records are reconciled.
+
 ## Quality checks
 
 ```bash

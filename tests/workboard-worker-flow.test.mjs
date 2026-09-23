@@ -7,12 +7,12 @@ function createDatabase() {
   const database = new DatabaseSync(":memory:");
   database.exec(`
     CREATE TABLE projects (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(owner_id, name));
-    CREATE TABLE tasks (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, title TEXT NOT NULL, project TEXT NOT NULL, deadline TEXT, owner_name TEXT NOT NULL, effort_hours REAL NOT NULL, status TEXT NOT NULL, blocker TEXT, notes TEXT NOT NULL DEFAULT '', notes_ai INTEGER NOT NULL DEFAULT 0, parent_task_id TEXT, recurring_task_id TEXT, source_kind TEXT, source_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(owner_id, source_kind, source_id));
+    CREATE TABLE tasks (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, title TEXT NOT NULL, project TEXT NOT NULL, project_id TEXT REFERENCES projects(id), deadline TEXT, owner_name TEXT NOT NULL, effort_hours REAL NOT NULL, status TEXT NOT NULL, blocker TEXT, notes TEXT NOT NULL DEFAULT '', notes_ai INTEGER NOT NULL DEFAULT 0, parent_task_id TEXT, recurring_task_id TEXT, source_kind TEXT, source_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(owner_id, source_kind, source_id));
     CREATE TABLE recurring_tasks (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, title TEXT NOT NULL, project TEXT NOT NULL, owner_name TEXT NOT NULL, effort_hours REAL NOT NULL, weekday INTEGER NOT NULL, active INTEGER NOT NULL, last_created_date TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE completed_tasks (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, task_id TEXT, title TEXT NOT NULL, project TEXT NOT NULL, completed_at TEXT NOT NULL, effort_hours REAL NOT NULL, points INTEGER NOT NULL);
     CREATE TABLE score_events (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, event_date TEXT NOT NULL, amount INTEGER NOT NULL, cause TEXT NOT NULL, task_id TEXT, created_at TEXT NOT NULL);
     CREATE TABLE source_items (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, source TEXT NOT NULL, source_id TEXT, payload TEXT NOT NULL, status TEXT NOT NULL, file_key TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-    CREATE TABLE milestones (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL, milestone_date TEXT NOT NULL, project TEXT NOT NULL, type TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE milestones (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, name TEXT NOT NULL, milestone_date TEXT NOT NULL, project TEXT NOT NULL, project_id TEXT REFERENCES projects(id), type TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
   `);
   return {
     prepare(sql) {

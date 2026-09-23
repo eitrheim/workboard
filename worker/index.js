@@ -41,6 +41,7 @@ function task(row) {
     id: row.id,
     title: row.title,
     project: row.project,
+    projectId: row.project_id || undefined,
     deadline: dateLabel(row.deadline),
     deadlineKey: dateOnly(row.deadline),
     owner: row.owner_name,
@@ -61,6 +62,7 @@ function completed(row) {
     sourceTaskId: row.task_id,
     title: row.title,
     project: row.project,
+    projectId: row.project_id || undefined,
     date: dateLabel(row.completed_at),
     dateKey: dateOnly(row.completed_at),
     createdAt: row.completed_at,
@@ -92,6 +94,7 @@ function milestone(row, tasks) {
     date: dateLabel(row.milestone_date),
     dateKey: dateOnly(row.milestone_date),
     project: row.project,
+    projectId: row.project_id || undefined,
     type: row.type,
     linkedTaskIds: tasks
       .filter((entry) => entry.project === row.project && ["active", "blocked"].includes(entry.status))
