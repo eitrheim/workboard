@@ -554,6 +554,34 @@ p {
   font-size: 21px;
   letter-spacing: -0.04em;
 }
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 20px;
+  color: #77756f;
+  font-size: 12px;
+  font-weight: 600;
+}
+.chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.chart-legend-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 4px;
+  border-radius: 999px;
+}
+.chart-legend-bar {
+  width: 9px;
+  height: 12px;
+  border-radius: 3px 3px 0 0;
+  background: #235c9c;
+}
+.chart-legend-average {
+  background: #087b72;
+}
 .bar-chart {
   height: 250px;
   display: grid;
@@ -671,6 +699,23 @@ p {
     );
   background-size: 100% 100%;
   background-repeat: no-repeat;
+}
+.moving-average-line {
+  position: absolute;
+  inset: 0 12px 28px;
+  z-index: 2;
+  width: calc(100% - 24px);
+  height: calc(100% - 28px);
+  overflow: visible;
+  pointer-events: none;
+}
+.moving-average-line polyline {
+  fill: none;
+  stroke: #087b72;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .bar-column {
   position: relative;

@@ -1620,6 +1620,10 @@ function CompletedView({ completed, scoreEvents = [], period, setPeriod, onUndo 
       .filter((item) => item.dateKey === day.key)
       .reduce((sum, item) => sum + Number(item.amount || item.points || 0), 0),
   }));
+  const movingAverage = bars.map((bar, index) => {
+    const window = bars.slice(Math.max(0, index - 6), index + 1);
+    return window.reduce((sum, item) => sum + item.value, 0) / window.length;
+  });
   const peak = Math.max(...bars.map((bar) => bar.value), 0);
   const max = Math.max(10, Math.ceil(peak / 10) * 10);
   const yTicks = [max, Math.round(max / 2), 0];
@@ -1690,6 +1694,10 @@ function CompletedView({ completed, scoreEvents = [], period, setPeriod, onUndo 
       </div>
       <div className="chart-section">
         <h2>Score by day</h2>
+        <div className="chart-legend" aria-label="Chart legend">
+          <span><i className="chart-legend-swatch chart-legend-bar" />Daily score</span>
+          <span><i className="chart-legend-swatch chart-legend-average" />7-day moving average</span>
+        </div>
         <div className="chart-plot">
           <div className="chart-y-axis" aria-hidden="true">
             {yTicks.map((tick) => (
@@ -1700,6 +1708,23 @@ function CompletedView({ completed, scoreEvents = [], period, setPeriod, onUndo 
             className={`bar-chart bar-chart-${periodDays}`}
             aria-label={`Score by day for the ${period.toLowerCase()}, scaled from zero to ${max} points`}
           >
+            <svg
+              className="moving-average-line"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+              role="img"
+              aria-label="7-day moving average"
+            >
+              <polyline
+                points={movingAverage
+                  .map((value, index) => {
+                    const x = ((index + 0.5) / bars.length) * 100;
+                    const y = 100 - (value / max) * 100;
+                    return `${x},${y}`;
+                  })
+                  .join(" ")}
+              />
+            </svg>
             {bars.map((bar) => {
               const height = bar.value ? Math.max(4, (bar.value / max) * 100) : 0;
               const isActive = activeBar === bar.key;
