@@ -577,10 +577,10 @@ p {
   width: 9px;
   height: 12px;
   border-radius: 3px 3px 0 0;
-  background: #235c9c;
+  background: #087b72;
 }
 .chart-legend-average {
-  background: #087b72;
+  background: #235c9c;
 }
 .bar-chart {
   height: 250px;
@@ -711,7 +711,7 @@ p {
 }
 .moving-average-line polyline {
   fill: none;
-  stroke: #087b72;
+  stroke: #235c9c;
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
   stroke-linecap: round;
