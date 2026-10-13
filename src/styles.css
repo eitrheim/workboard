@@ -320,7 +320,7 @@ p {
 }
 .queue-list {
   display: grid;
-  gap: 15px;
+  gap: 10px;
 }
 .queue-card {
   min-height: 170px;
@@ -989,17 +989,17 @@ p {
     font-size: 12px;
   }
   .queue-list {
-    gap: 12px;
+    gap: 9px;
   }
   .queue-card {
     min-height: auto;
-    padding: 19px;
+    padding: 14px 16px;
     display: block;
-    border-radius: 17px;
+    border-radius: 15px;
   }
   .source-line {
     gap: 7px;
-    margin-bottom: 11px;
+    margin-bottom: 7px;
     font-size: 12px;
   }
   .source-line > svg {
@@ -1010,22 +1010,22 @@ p {
     font-size: 10px;
   }
   .queue-card h2 {
-    font-size: 19px;
+    font-size: 17px;
     line-height: 1.18;
   }
   .meta-copy,
   .warning-copy {
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.4;
   }
   .card-actions {
     justify-content: flex-end;
-    margin-top: 18px;
+    margin-top: 12px;
   }
   .card-actions .secondary-button,
   .card-actions .primary-button {
-    min-height: 36px;
-    padding-inline: 13px;
+    min-height: 32px;
+    padding-inline: 11px;
     font-size: 12px;
   }
   .register-toolbar {
@@ -1990,25 +1990,25 @@ p {
   color: #77756f;
 }
 .queue-card {
-  min-height: 132px;
-  padding: 18px 22px;
-  border-radius: 17px;
+  min-height: 108px;
+  padding: 14px 18px;
+  border-radius: 15px;
 }
 .source-line {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 .queue-card h2 {
-  margin-bottom: 5px;
-  font-size: 20px;
+  margin-bottom: 4px;
+  font-size: 18px;
 }
 .meta-copy,
 .warning-copy {
-  font-size: 14px;
+  font-size: 13px;
 }
 .card-actions .primary-button,
 .card-actions .secondary-button {
-  min-height: 38px;
-  padding-inline: 14px;
+  min-height: 34px;
+  padding-inline: 11px;
 }
 @media (max-width: 780px) {
   .register-heading {
