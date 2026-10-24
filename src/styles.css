@@ -1,7 +1,18 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap");
 :root {
+  --color-ink: #161616;
+  --color-action: #087b72;
+  --color-action-strong: #05665e;
+  --color-action-soft: #e8f4f2;
+  --color-insight: #235c9c;
+  --color-insight-soft: #eef4fb;
+  --color-attention: #966214;
+  --color-attention-soft: #fff5df;
+  --color-danger: #a42625;
+  --color-danger-soft: #fff0ee;
+  --color-border: #e1e0dc;
   font-family: "DM Sans", Inter, ui-sans-serif, system-ui, sans-serif;
-  color: #161616;
+  color: var(--color-ink);
   background: #fdfdfc;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -27,7 +38,7 @@ button {
 button:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 3px solid rgba(42, 100, 168, 0.32);
+  outline: 3px solid rgba(35, 92, 156, 0.32);
   outline-offset: 2px;
 }
 .app-shell {
@@ -287,13 +298,13 @@ p {
 }
 .new-task-button,
 .milestone-add-button {
-  border-color: #087b72;
-  background: #087b72;
+  border-color: var(--color-action);
+  background: var(--color-action);
 }
 .new-task-button:hover,
 .milestone-add-button:hover {
-  border-color: #05665e;
-  background: #05665e;
+  border-color: var(--color-action-strong);
+  background: var(--color-action-strong);
 }
 .queue-card .primary-button,
 .extracted-approve-all,
@@ -302,8 +313,8 @@ p {
 .save-row-button,
 .milestone-edit-actions .primary-button,
 .modal-actions .primary-button {
-  border-color: #087b72;
-  background: #087b72;
+  border-color: var(--color-action);
+  background: var(--color-action);
 }
 .queue-card .primary-button:hover,
 .extracted-approve-all:hover,
@@ -312,8 +323,8 @@ p {
 .save-row-button:hover,
 .milestone-edit-actions .primary-button:hover,
 .modal-actions .primary-button:hover {
-  border-color: #05665e;
-  background: #05665e;
+  border-color: var(--color-action-strong);
+  background: var(--color-action-strong);
 }
 .quick-approve-button {
   color: #fff;
@@ -2291,7 +2302,7 @@ p {
   flex-direction: column;
   align-items: flex-start;
   padding: 22px 24px;
-  border: 1px solid #e1e0dc;
+  border: 1px solid var(--color-border);
   border-radius: 17px;
   color: #232321;
   background: #fff;
@@ -2322,11 +2333,11 @@ p {
   font-weight: 600;
 }
 .overview-card-label svg {
-  color: #087b72;
+  color: var(--color-action);
 }
 .overview-milestone-card .overview-card-label svg,
 .overview-score-card .overview-card-label svg {
-  color: #087b72;
+  color: var(--color-insight);
 }
 .overview-card-top > svg {
   color: #aaa8a0;
@@ -2347,23 +2358,50 @@ p {
   color: #9a9891;
   font-size: 12px;
 }
-.overview-queue {
+.overview-queue-clear {
   border-color: #bde4c6;
   background: #edf8ef;
 }
-.overview-queue .overview-card-label,
-.overview-queue .overview-card-label svg,
-.overview-queue > p {
+.overview-queue-clear .overview-card-label,
+.overview-queue-clear .overview-card-label svg,
+.overview-queue-clear > p {
   color: #28753d;
 }
-.overview-register {
+.overview-queue-pending,
+.overview-register-due {
   border-color: #edd18a;
   background: #fff5df;
 }
-.overview-register .overview-card-label,
-.overview-register .overview-card-label svg,
-.overview-register > p {
+.overview-queue-pending .overview-card-label,
+.overview-queue-pending .overview-card-label svg,
+.overview-queue-pending > p,
+.overview-register-due .overview-card-label,
+.overview-register-due .overview-card-label svg,
+.overview-register-due > p {
   color: #966214;
+}
+.overview-register-urgent {
+  border-color: #f0c2bd;
+  background: var(--color-danger-soft);
+}
+.overview-register-urgent .overview-card-label,
+.overview-register-urgent .overview-card-label svg,
+.overview-register-urgent > p {
+  color: var(--color-danger);
+}
+.overview-register-clear {
+  border-color: #d8e1ef;
+  background: #f8fbff;
+}
+.overview-register-clear .overview-card-label,
+.overview-register-clear .overview-card-label svg,
+.overview-register-clear > p {
+  color: var(--color-insight);
+}
+.overview-milestone-card,
+.overview-score-card {
+  border-color: #d8e1ef;
+  background: #fbfdff;
 }
 .overview-score-card {
   min-height: 225px;
@@ -2445,6 +2483,94 @@ p {
   color: #96948d;
   font-size: 13px;
 }
+.weekly-recap-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(220px, 1.6fr) auto auto auto;
+  align-items: center;
+  gap: 28px;
+  margin-top: 22px;
+  padding: 23px 26px;
+  border: 1px solid #c7d9ee;
+  border-radius: 18px;
+  color: #20221f;
+  background: linear-gradient(100deg, #f4f9ff 0%, #ffffff 58%);
+  text-align: left;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+.weekly-recap-card:hover {
+  border-color: #8fb1d8;
+  box-shadow: 0 12px 28px rgba(35, 92, 156, 0.1);
+  transform: translateY(-2px);
+}
+.weekly-recap-copy {
+  min-width: 0;
+}
+.weekly-recap-eyebrow {
+  display: block;
+  color: var(--color-insight);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.weekly-recap-copy h2 {
+  margin: 5px 0 3px;
+  color: var(--color-ink);
+  font-size: 20px;
+  letter-spacing: -0.03em;
+}
+.weekly-recap-copy p {
+  margin: 0;
+  color: #6e6c66;
+  font-size: 13px;
+}
+.weekly-recap-score {
+  display: grid;
+  gap: 1px;
+  min-width: 104px;
+  padding-left: 28px;
+  border-left: 1px solid #d7e2ef;
+}
+.weekly-recap-score strong {
+  color: var(--color-insight);
+  font-size: 30px;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+.weekly-recap-score span {
+  color: #6e6c66;
+  font-size: 11px;
+  font-weight: 600;
+}
+.weekly-recap-stats {
+  display: grid;
+  gap: 7px;
+  min-width: 142px;
+  color: #55534e;
+  font-size: 12px;
+  font-weight: 600;
+}
+.weekly-recap-stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.weekly-recap-stats svg:first-child {
+  color: var(--color-action);
+}
+.weekly-recap-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--color-insight);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
 @media (max-width: 1100px) and (min-width: 781px) {
   .overview-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2482,6 +2608,31 @@ p {
   }
   .overview-milestone-item {
     padding: 8px;
+  }
+  .weekly-recap-card {
+    grid-template-columns: 1fr auto;
+    gap: 18px 14px;
+    margin-top: 14px;
+    padding: 18px;
+    border-radius: 15px;
+  }
+  .weekly-recap-copy h2 {
+    font-size: 17px;
+  }
+  .weekly-recap-score {
+    min-width: 78px;
+    padding-left: 15px;
+  }
+  .weekly-recap-score strong {
+    font-size: 26px;
+  }
+  .weekly-recap-stats {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr 1fr;
+    min-width: 0;
+  }
+  .weekly-recap-link {
+    grid-column: 1 / -1;
   }
 }
 .file-attachment {
@@ -4021,7 +4172,7 @@ p {
   }
 }
 
-/* Purple is the app's forward-motion color: create, approve, save, and edit. */
+/* Color language: green advances work, blue communicates insight, amber needs attention, red signals urgency. */
 .inline-input:focus,
 .form-grid input:focus,
 .form-grid select:focus,
@@ -4029,7 +4180,7 @@ p {
 .milestone-quick-add input:focus,
 .quick-project-select select:focus,
 .raw-text-entry textarea:focus {
-  border-color: #087b72;
+  border-color: var(--color-action);
   outline: 3px solid rgba(8, 123, 114, 0.16);
 }
 
@@ -4043,4 +4194,63 @@ p {
 .completed-screen .metric-card > strong {
   margin-top: 10px;
   font-size: 25px;
+}
+
+/* Dense task rows keep task names primary while preserving scan-friendly metadata and actions. */
+.queue-card {
+  min-height: 96px;
+  padding: 12px 16px;
+  border-left: 3px solid #d8e1ef;
+}
+.queue-card.warning-card {
+  border-left-color: var(--color-attention);
+}
+.register-table .table-head {
+  padding-bottom: 11px;
+  color: #77756f;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+.register-table .table-row {
+  min-height: 56px;
+  padding-block: 7px;
+  transition: background 0.16s ease;
+}
+.register-table .table-row:hover {
+  background: #f8fbfa;
+}
+.register-table .task-cell strong {
+  color: var(--color-ink);
+  font-size: 14px;
+  line-height: 1.25;
+}
+.completed-table-head {
+  min-height: 46px;
+  font-size: 11px;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+.completed-table-row {
+  min-height: 62px;
+  padding-block: 10px;
+}
+.completed-table-row:hover {
+  background: #fbfdfc;
+}
+@media (max-width: 780px) {
+  .queue-card {
+    min-height: 0;
+    padding: 14px 15px;
+    border-radius: 15px;
+  }
+  .register-table .table-row {
+    min-height: 62px;
+    padding-block: 10px;
+  }
+  .completed-table-row {
+    min-height: 64px;
+    padding-block: 11px;
+  }
 }

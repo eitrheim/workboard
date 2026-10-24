@@ -45,15 +45,25 @@ function NavButton({ item, count, active, onClick, compact = false }) {
 }
 
 function Overview({ queue, tasks, completed, scoreEvents, milestones, onNavigate }) {
-  const dueToday = tasks.filter((task) => task.deadlineKey === todayKey() || task.deadline === "Today").length;
+  const today = todayKey();
+  const dueToday = tasks.filter((task) => task.deadlineKey === today || task.deadline === "Today").length;
   const scoreDays = getLastSevenScoreDays(completed, scoreEvents);
   const periodScore = scoreDays.reduce((sum, day) => sum + day.value, 0);
+  const weekStart = scoreDays[0]?.dateKey || today;
+  const isInCurrentWeek = (dateKey) => Boolean(dateKey && dateKey >= weekStart && dateKey <= today);
+  const completedThisWeek = completed.filter((item) => isInCurrentWeek(item.dateKey)).length;
+  const tasksAddedThisWeek = scoreEvents.filter(
+    (item) => item.cause === "task added" && isInCurrentWeek(item.dateKey),
+  ).length;
+  const overdue = tasks.filter((task) => task.deadlineKey && task.deadlineKey < today).length;
   const upcomingMilestones = [...milestones]
-    .filter((milestone) => milestone.dateKey && milestone.dateKey >= todayKey())
+    .filter((milestone) => milestone.dateKey && milestone.dateKey >= today)
     .sort((left, right) => left.dateKey.localeCompare(right.dateKey))
     .slice(0, 2);
   const queueDetail =
-    queue.length === 0 ? "items to review; you're caught up" : `${queue.length === 1 ? "item" : "items"} to review`;
+    queue.length === 0
+      ? "No items waiting for review"
+      : `${queue.length} ${queue.length === 1 ? "item" : "items"} ready to review`;
   return (
     <section className="screen-content overview-screen">
       <div className="overview-intro">
@@ -65,7 +75,7 @@ function Overview({ queue, tasks, completed, scoreEvents, milestones, onNavigate
           label="Review queue"
           value={`${queue.length}`}
           detail={queueDetail}
-          tone="queue"
+          tone={queue.length ? "queue-pending" : "queue-clear"}
           onClick={() => onNavigate("review")}
         />
         <OverviewCard
@@ -73,7 +83,7 @@ function Overview({ queue, tasks, completed, scoreEvents, milestones, onNavigate
           label="Work register"
           value={`${dueToday}`}
           detail={`${dueToday === 1 ? "item" : "items"} due today`}
-          tone="register"
+          tone={overdue ? "register-urgent" : dueToday ? "register-due" : "register-clear"}
           onClick={() => onNavigate("register")}
         />
         <OverviewMilestoneCard milestones={upcomingMilestones} onClick={() => onNavigate("milestones")} />
@@ -94,7 +104,49 @@ function Overview({ queue, tasks, completed, scoreEvents, milestones, onNavigate
           </div>
         </button>
       </div>
+      <WeeklyRecapCard
+        score={periodScore}
+        completed={completedThisWeek}
+        added={tasksAddedThisWeek}
+        queueCount={queue.length}
+        onClick={() => onNavigate("completed")}
+      />
     </section>
+  );
+}
+
+function WeeklyRecapCard({ score, completed, added, queueCount, onClick }) {
+  const completedLabel = `${completed} ${completed === 1 ? "task" : "tasks"} completed`;
+  const addedLabel = `${added} ${added === 1 ? "task" : "tasks"} added`;
+  const nextStep = queueCount
+    ? `${queueCount} ${queueCount === 1 ? "item is" : "items are"} ready to review`
+    : "Review queue is clear";
+
+  return (
+    <button className="weekly-recap-card" onClick={onClick} type="button">
+      <div className="weekly-recap-copy">
+        <span className="weekly-recap-eyebrow">Weekly recap</span>
+        <h2>{score > 0 ? "You kept work moving" : "Set your momentum for the week"}</h2>
+        <p>{nextStep}</p>
+      </div>
+      <div className="weekly-recap-score">
+        <strong>{score}</strong>
+        <span>points earned</span>
+      </div>
+      <div className="weekly-recap-stats" aria-label="Weekly task activity">
+        <span>
+          <CheckCircle size={17} weight="fill" />
+          {completedLabel}
+        </span>
+        <span>
+          <StackSimple size={17} weight="fill" />
+          {addedLabel}
+        </span>
+      </div>
+      <span className="weekly-recap-link">
+        View score <ArrowRight size={17} />
+      </span>
+    </button>
   );
 }
 
@@ -181,7 +233,7 @@ function ScoreLineChart({ points }) {
       context.moveTo(0, height - 12);
       context.lineTo(width, height - 12);
       context.stroke();
-      context.strokeStyle = "#087B72";
+      context.strokeStyle = "#235C9C";
       context.lineWidth = 3;
       context.lineJoin = "round";
       context.lineCap = "round";
@@ -196,7 +248,7 @@ function ScoreLineChart({ points }) {
         context.beginPath();
         context.arc(x(index), y(point.value), 4, 0, Math.PI * 2);
         context.fill();
-        context.fillStyle = "#087B72";
+        context.fillStyle = "#235C9C";
         context.beginPath();
         context.arc(x(index), y(point.value), 2.5, 0, Math.PI * 2);
         context.fill();
@@ -1695,8 +1747,14 @@ function CompletedView({ completed, scoreEvents = [], period, setPeriod, onUndo 
       <div className="chart-section">
         <h2>Score by day</h2>
         <div className="chart-legend" aria-label="Chart legend">
-          <span><i className="chart-legend-swatch chart-legend-bar" />Daily score</span>
-          <span><i className="chart-legend-swatch chart-legend-average" />7-day moving average</span>
+          <span>
+            <i className="chart-legend-swatch chart-legend-bar" />
+            Daily score
+          </span>
+          <span>
+            <i className="chart-legend-swatch chart-legend-average" />
+            7-day moving average
+          </span>
         </div>
         <div className="chart-plot">
           <div className="chart-y-axis" aria-hidden="true">
