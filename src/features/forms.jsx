@@ -64,12 +64,13 @@ function Modal({
 
 function TaskForm({ title, subtitle, item, projectOptions = [], onClose, onSave, onDelete, onReject, showReject }) {
   const isMilestone = item?.itemKind === "MILESTONE";
+  const isNewTask = !item;
   const [values, setValues] = useState({
     title: item?.title || "",
     project: item?.project || "",
-    effortHours: item?.effortHours || "",
+    effortHours: item?.effortHours ?? (isNewTask ? "1" : ""),
     deadline: calendarDateValue(item?.deadline, item?.deadlineKey),
-    owner: item?.owner || "Unassigned",
+    owner: item?.owner || (isNewTask ? "Ann" : "Unassigned"),
     notes: item?.notes || "",
     notesAi: item?.notesAi || false,
     itemKind: item?.itemKind || "TASK",
