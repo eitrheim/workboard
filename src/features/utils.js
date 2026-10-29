@@ -31,8 +31,8 @@ function emptyTaskDraft(index = 0) {
     project: "",
     deadline: "",
     deadlineKey: null,
-    owner: "",
-    effortHours: "",
+    owner: "Ann",
+    effortHours: "1",
   };
 }
 
